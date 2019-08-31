@@ -108,10 +108,11 @@ def buildAux (tools : Tools) (depsDir : String)
 | needsRebuild', hd :: tl ⇒ do
   done ← doneRef.get;
   if done.notElem hd.name then do
+    cwd ← IO.realPath ".";
     IO.chdir [depsDir, hd.name].joinPath;
     needsRebuild ← or needsRebuild' <$> not <$> IO.fileExists hd.getBinary;
     IO.cond needsRebuild (compileProject hd tools []);
-    IO.chdir [ "..", ".." ].joinPath;
+    IO.chdir cwd;
     doneRef.set (hd.name :: done);
     buildAux needsRebuild tl
   else buildAux needsRebuild' tl
