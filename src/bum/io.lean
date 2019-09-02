@@ -8,7 +8,7 @@ List.joinPath <$>
     [ leanHome, "bin", "libleanstdlib.a" ] ]
 def Lean.cppOptions := [ "-fPIC", "-Wno-unused-command-line-argument" ]
 
-def config := "bump.config"
+def config := "bum.config"
 
 def runCmdPretty (s additionalInfo : String) : IO Unit := do
   IO.println ("==> " ++ s ++ " " ++ additionalInfo);
