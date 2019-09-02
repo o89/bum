@@ -1,4 +1,4 @@
-import init.system.io init.system.filepath bump.io
+import init.system.io init.system.filepath bum.io
 
 def eval : Command → IO Unit
 | Command.start ⇒ do

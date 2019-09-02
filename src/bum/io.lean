@@ -1,5 +1,5 @@
 import init.system.io init.system.filepath
-import bump.configconverter
+import bum.configconverter
 
 def Lean.deps := [ "-lpthread", "-lgmp" ]
 def Lean.libraries (leanHome : String) := 

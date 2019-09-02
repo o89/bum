@@ -1,4 +1,4 @@
-# BUMP
+# BUM
 
 ## Installation
 
@@ -14,9 +14,9 @@ $ echo 'export LEAN_HOME=/path/to/lean4 >> ~/.bashrc'
 $ make
 ```
 
-3. And copy `bump` binary to your preferred place:
+3. And copy `bum` binary to your preferred place:
 
 ```
-$ sudo cp bump /usr/local/bin
-# cp bump ~/.local/bin
+$ sudo cp bum /usr/local/bin
+# cp bum ~/.local/bin
 ```

@@ -29,9 +29,9 @@ partial def Command.ofList : List String → Except String (List Command)
 | [] ⇒ Except.ok []
 
 def Command.helpString :=
-"BUMP Lean 4 build tool
+"BUM Lean 4 build tool
 
-    invoke = bump | bump list
+    invoke = bum | bum list
       list = []   | command [options] list
    command = app [zero|n2o|nitro] | deps | compile
            | start | clean"

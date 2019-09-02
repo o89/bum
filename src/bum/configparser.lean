@@ -1,4 +1,4 @@
-import bump.types bump.parser
+import bum.types bum.parser
 
 def whitespace := sat Char.isWhitespace
 

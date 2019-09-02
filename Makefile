@@ -2,11 +2,11 @@
 LEAN_PATH = $(LEAN_DIR)/library:./src
 export LEAN_PATH
 
-CPP = src/bump/bindings
-LEAN = src/bump/aux src/bump/parser src/bump/types src/bump/configparser src/bump/configconverter src/bump/io src/bump/bump
+CPP = src/bum/bindings
+LEAN = src/bum/aux src/bum/parser src/bum/types src/bum/configparser src/bum/configconverter src/bum/io src/bum/bum
 FLAGS = -g -Wall
 
-RES = bump
+RES = bum
 
 $(RES): $(addsuffix .cpp,$(LEAN) $(CPP))
 	$(LEAN_DIR)/bin/leanc -o $(RES) $(addsuffix .cpp,$(LEAN) $(CPP))
