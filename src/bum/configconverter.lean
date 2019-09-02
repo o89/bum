@@ -1,4 +1,4 @@
-import bum.aux bum.configparser
+import bum.auxiliary bum.configparser
 
 def getExt (filename : String) : String × String :=
 let byDot := filename.split ".";
