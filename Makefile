@@ -3,7 +3,7 @@ LEAN_PATH = $(LEAN_DIR)/library:./src
 export LEAN_PATH
 
 CPP = src/bum/bindings
-LEAN = src/bum/auxiliary src/bum/parser src/bum/types src/bum/configparser src/bum/configconverter src/bum/io src/bum/bum
+LEAN = src/bum/auxiliary src/bum/types src/bum/parser src/bum/io src/bum/bum
 FLAGS = -g -Wall
 
 RES = bum
