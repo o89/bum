@@ -116,7 +116,8 @@ protected def getRepo : Syntax → CanFail Repo
   url ← (getStrLit $ val.getArg 2).err "URI must be a string";
 
   match repoVar with
-  | `git ⇒ pure (Repo.git url)
+  | `git    ⇒ pure (Repo.git url)
+  | `github ⇒ pure (Repo.github url)
   | repo ⇒ throw ("“" ++ toString repo ++ "” is unknown repository type")
 | _ ⇒ throw "repository description must be a tuple"
 

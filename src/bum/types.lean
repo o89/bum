@@ -66,16 +66,18 @@ def Command.helpString :=
 inductive Repo
 | none
 | git : String → Repo
+| github : String → Repo
 
 -- TODO: remove hard-coded GitHub
 def Application.toRepo : Application → Repo
-| Application.zero  ⇒ Repo.git "https://github.com/o89/sample-zero"
-| Application.n2o   ⇒ Repo.git "https://github.com/o89/sample-n2o"
-| Application.nitro ⇒ Repo.git "https://github.com/o89/sample-nitro"
+| Application.zero  ⇒ Repo.github "o89/sample-zero"
+| Application.n2o   ⇒ Repo.github "o89/sample-n2o"
+| Application.nitro ⇒ Repo.github "o89/sample-nitro"
 
 def Repo.cmd (target : String) : Repo → String
 | Repo.none    ⇒ ""
 | Repo.git url ⇒ "git clone " ++ url ++ " " ++ target
+| Repo.github url ⇒ "git clone https://github.com/" ++ url ++ " " ++ target
 
 structure Dep :=
 (name : String) (source : Repo)
@@ -86,7 +88,8 @@ Repo.cmd (depsDir ++ "/" ++ x.name) x.source
 instance : HasToString Dep :=
 ⟨λ s ⇒ match s with
 | ⟨name, Repo.none⟩    ⇒ name
-| ⟨name, Repo.git url⟩ ⇒ name ++ " \"" ++ url ++ "\""⟩
+| ⟨name, Repo.github url⟩ ⇒ name ++ " github \"" ++ url ++ "\""
+| ⟨name, Repo.git url⟩ ⇒ name ++ " git \"" ++ url ++ "\""⟩
 
 inductive BuildType
 | executable | library
