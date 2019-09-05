@@ -10,11 +10,16 @@ def Lean.cppOptions := [ "-fPIC", "-Wno-unused-command-line-argument" ]
 
 def config := "bum.config"
 
-def runCmdPretty (s additionalInfo : String) : IO Unit := do
+def runCmdPretty (additionalInfo s : String) : IO Unit := do
   IO.println ("==> " ++ s ++ " " ++ additionalInfo);
   exitv ← IO.runCmd s;
   let errorStr := "process exited with code " ++ toString exitv;
   IO.cond (exitv ≠ 0) (throw errorStr)
+
+def sourceOlean (tools : Tools) : Source → Option (List String)
+| src@(Source.lean path) ⇒
+  some [ [ tools.lean, "--make", src.path ].space ]
+| _ ⇒ none
 
 def sourceCommands (tools : Tools) : Source → List String
 | src@(Source.lean path) ⇒
@@ -46,12 +51,15 @@ match conf.build with
   List.join (sourceCommands tools <$> conf.files) ++
   [ sourceLink conf.getBinary tools conf.files ]
 
+def oleanCommands (conf : Project) (tools : Tools) :=
+List.join (List.filterMap (sourceOlean tools) conf.files)
+
 def procents {α : Type} (xs : List α) : List (Nat × α) :=
 (λ (p : Nat × α) ⇒ (p.1 * 100 / xs.length, p.2)) <$> xs.enum
 
 def compileProject (conf : Project) (tools : Tools) (libs : List String) : IO Unit :=
 let runPretty :=
-λ (p : Nat × String) ⇒ runCmdPretty p.2 ("(" ++ toString p.1 ++ " %)");
+λ (p : Nat × String) ⇒ runCmdPretty ("(" ++ toString p.1 ++ " %)") p.2;
 let actions := runPretty <$> procents (compileCommands conf tools libs);
 IO.println ("Compiling " ++ conf.name) >> forM' id actions
 
@@ -101,6 +109,16 @@ def getDepBinaryPath (depsDir : String) (conf : Project) : String :=
 def getCppLibraries (conf : Project) : List String :=
 String.append "-l" <$> conf.cppLibs
 
+def evalDep {α : Type} (depsDir : String) (conf : Project)
+  (action : IO α) : IO α := do
+  cwd ← IO.realPath ".";
+  let path := [ depsDir, conf.name ].joinPath;
+  exitv ← IO.chdir path;
+  let errString := "cannot go to " ++ path;
+  IO.cond (exitv ≠ 0) (throw errString);
+  val ← action; IO.chdir cwd;
+  pure val
+
 def buildAux (tools : Tools) (depsDir : String)
   (doneRef : IO.Ref (List String)) :
   Bool → List Project → IO Unit
@@ -108,11 +126,11 @@ def buildAux (tools : Tools) (depsDir : String)
 | needsRebuild', hd :: tl ⇒ do
   done ← doneRef.get;
   if done.notElem hd.name then do
-    cwd ← IO.realPath ".";
-    IO.chdir [depsDir, hd.name].joinPath;
-    needsRebuild ← or needsRebuild' <$> not <$> IO.fileExists hd.getBinary;
-    IO.cond needsRebuild (compileProject hd tools []);
-    IO.chdir cwd;
+    needsRebuild ← evalDep depsDir hd (do
+      needsRebuild ← or needsRebuild' <$> not <$> IO.fileExists hd.getBinary;
+      IO.cond needsRebuild (compileProject hd tools []);
+      pure needsRebuild);
+
     doneRef.set (hd.name :: done);
     buildAux needsRebuild tl
   else buildAux needsRebuild' tl
@@ -128,3 +146,24 @@ def build (tools : Tools) (conf : Project) : IO Unit := do
     Lean.libraries tools.leanHome ++
     getDepBinaryPath conf.depsDir <$> deps;
   compileProject conf tools libs
+
+def olean (tools : Tools) (conf : Project) : IO Unit := do
+  IO.println ("Generate .olean for " ++ conf.name);
+  forM' (runCmdPretty "") (oleanCommands conf tools)
+
+def recOlean (tools : Tools) (conf : Project) : IO Unit := do
+  deps ← resolveDeps conf;
+  getLeanPathFromDeps conf.depsDir deps >>= addToLeanPath;
+  forM' (λ cur ⇒ evalDep conf.depsDir cur (olean tools cur)) deps;
+  olean tools conf
+
+def clean (conf : Project) : IO Unit := do
+  conf ← readConf config;
+  let buildFiles :=
+  conf.getBinary :: List.join (Source.garbage <$> conf.files);
+  forM' silentRemove buildFiles  
+
+def cleanRec (conf : Project) : IO Unit := do
+  deps ← resolveDeps conf;
+  forM' (λ cur ⇒ evalDep conf.depsDir cur (clean cur)) deps;
+  clean conf

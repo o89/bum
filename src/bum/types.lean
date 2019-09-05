@@ -7,9 +7,20 @@ def Application.ofString : String → Except String Application
 | "nitro" ⇒ Except.ok Application.nitro
 | s       ⇒ Except.error ("unknown template “" ++ s ++"”")
 
+inductive Scale
+| this | all
+
+instance : Inhabited Scale := ⟨Scale.this⟩
+
+def Scale.ofString : String → Except String Scale
+| "this" ⇒ Except.ok Scale.this
+| "all"  ⇒ Except.ok Scale.all
+| s      ⇒ Except.error ("unknown scale “" ++ s ++"”")
+
 inductive Command
 | app : Application → Command | deps | compile
-| start | clean
+| start | clean : Scale → Command
+| olean : Scale → Command
 | help
 
 partial def Command.ofList : List String → Except String (List Command)
@@ -17,8 +28,23 @@ partial def Command.ofList : List String → Except String (List Command)
   match hd with
   | "compile" ⇒ List.cons Command.compile <$> Command.ofList tl
   | "start"   ⇒ List.cons Command.start   <$> Command.ofList tl
-  | "clean"   ⇒ List.cons Command.clean   <$> Command.ofList tl
   | "deps"    ⇒ List.cons Command.deps    <$> Command.ofList tl
+  | "clean"   ⇒
+    match tl with
+    | hd :: tl' ⇒
+      match Scale.ofString hd with
+      | Except.ok scale ⇒
+        List.cons (Command.clean scale) <$> Command.ofList tl'
+      | _ ⇒ List.cons (Command.clean $ default Scale) <$> Command.ofList tl
+    | [] ⇒ pure [ Command.clean (default Scale) ]
+  | "olean"   ⇒
+    match tl with
+    | hd :: tl' ⇒
+      match Scale.ofString hd with
+      | Except.ok scale ⇒
+        List.cons (Command.olean scale) <$> Command.ofList tl'
+      | _ ⇒ List.cons (Command.olean $ default Scale) <$> Command.ofList tl
+    | [] ⇒ pure [ Command.olean (default Scale) ]
   | "app"     ⇒
     match tl with
     | template :: tl' ⇒
@@ -31,10 +57,11 @@ partial def Command.ofList : List String → Except String (List Command)
 def Command.helpString :=
 "BUM Lean 4 build tool
 
-    invoke = bum | bum list
+    invoke = bum  | bum list
       list = []   | command [options] list
    command = app [zero|n2o|nitro] | deps | compile
-           | start | clean"
+           | start | clean | clean [this|all]
+           | olean | olean [this|all]"
 
 inductive Repo
 | none

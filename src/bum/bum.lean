@@ -1,5 +1,18 @@
 import init.system.io init.system.filepath bum.io
 
+def getTools (conf : Project) : IO Tools := do
+  leanHomeOpt ← IO.getEnv "LEAN_HOME";
+  match leanHomeOpt with
+  | some leanHome ⇒ do
+    IO.setEnv "LEAN_PATH" [ leanHome, "library" ].joinPath;
+    IO.realPath [ ".", "src" ].joinPath >>= addToLeanPath;
+    IO.runCmd ("mkdir -p " ++ conf.depsDir);
+    pure ⟨leanHome,
+          [ leanHome, "bin", "lean" ].joinPath,
+          [ leanHome, "bin", "leanc" ].joinPath,
+          "ar", "c++"⟩
+  | none ⇒ throw "LEAN_HOME not found"
+
 def eval : Command → IO Unit
 | Command.start ⇒ do
   conf ← readConf config;
@@ -11,26 +24,24 @@ def eval : Command → IO Unit
     pure ()
   | BuildType.library ⇒
     IO.println "Cannot start a library"
-| Command.clean ⇒ do
+| Command.clean scale ⇒ do
   conf ← readConf config;
-  let buildFiles :=
-  conf.getBinary :: List.join (Source.garbage <$> conf.files);
-  forM' silentRemove buildFiles
+  (match scale with
+  | Scale.this ⇒ clean
+  | Scale.all  ⇒ cleanRec) conf
 | Command.compile ⇒ do
   conf ← readConf config;
-  leanHomeOpt ← IO.getEnv "LEAN_HOME";
-  match leanHomeOpt with
-  | some leanHome ⇒ do
-    IO.setEnv "LEAN_PATH" [ leanHome, "library" ].joinPath;
-    IO.realPath [ ".", "src" ].joinPath >>= addToLeanPath;
-    let tools : Tools :=
-    ⟨leanHome,
-     [ leanHome, "bin", "lean" ].joinPath,
-     [ leanHome, "bin", "leanc" ].joinPath,
-     "ar", "c++"⟩;
-    IO.runCmd ("mkdir -p " ++ conf.depsDir);
-    build tools conf
-  | none ⇒ throw "LEAN_HOME not found"
+  tools ← getTools conf;
+  build tools conf
+| Command.olean scale ⇒ do
+  conf ← readConf config;
+  tools ← getTools conf;
+  match scale with
+  | Scale.this ⇒ do
+    deps ← resolveDeps conf;
+    getLeanPathFromDeps conf.depsDir deps >>= addToLeanPath;
+    olean tools conf
+  | Scale.all ⇒ recOlean tools conf
 | Command.deps ⇒ do
   conf ← readConf config;
   deps ← resolveDeps conf true;
