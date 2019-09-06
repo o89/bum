@@ -51,12 +51,13 @@ def eval : Command → IO Unit
   else pure ()
 | Command.help ⇒ IO.println Command.helpString
 | Command.app app ⇒ do IO.runCmd (Repo.cmd "." app.toRepo); pure ()
+| Command.nope ⇒ pure ()
 
 def evalList : List Command → IO Unit
 | [] ⇒ eval Command.help
 | xs ⇒ forM' eval xs >> IO.println "OK"
 
 def main (args : List String) :=
-match Command.ofList args with
+match Command.parse args with
 | Except.ok v      ⇒ evalList v
 | Except.error err ⇒ IO.println err

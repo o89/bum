@@ -21,38 +21,41 @@ inductive Command
 | app : Application → Command | deps | compile
 | start | clean : Scale → Command
 | olean : Scale → Command
-| help
+| help | nope
 
-partial def Command.ofList : List String → Except String (List Command)
-| hd :: tl ⇒
-  match hd with
-  | "compile" ⇒ List.cons Command.compile <$> Command.ofList tl
-  | "start"   ⇒ List.cons Command.start   <$> Command.ofList tl
-  | "deps"    ⇒ List.cons Command.deps    <$> Command.ofList tl
-  | "clean"   ⇒
-    match tl with
-    | hd :: tl' ⇒
-      match Scale.ofString hd with
-      | Except.ok scale ⇒
-        List.cons (Command.clean scale) <$> Command.ofList tl'
-      | _ ⇒ List.cons (Command.clean $ default Scale) <$> Command.ofList tl
-    | [] ⇒ pure [ Command.clean (default Scale) ]
-  | "olean"   ⇒
-    match tl with
-    | hd :: tl' ⇒
-      match Scale.ofString hd with
-      | Except.ok scale ⇒
-        List.cons (Command.olean scale) <$> Command.ofList tl'
-      | _ ⇒ List.cons (Command.olean $ default Scale) <$> Command.ofList tl
-    | [] ⇒ pure [ Command.olean (default Scale) ]
-  | "app"     ⇒
-    match tl with
-    | template :: tl' ⇒
-      List.cons <$> (Command.app <$> Application.ofString template) <*>
-        Command.ofList tl'
-    | [] ⇒ Except.error "“app” expects template name"
-  | _ ⇒ Except.error ("unknown command “" ++ hd ++"”")
-| [] ⇒ Except.ok []
+protected def Command.reserved :=
+[ "compile", "start", "deps", "clean", "olean", "app" ]
+
+protected def Command.groupAux :
+  String × List String → List (String × List String) →
+  List String → List (String × List String)
+| ("", []), [], [] ⇒ []
+| (name, options), buf, hd :: tl ⇒
+  if Command.reserved.elem hd then
+    Command.groupAux (hd, []) (buf ++ [ (name, options) ]) tl
+  else Command.groupAux (name, options ++ [ hd ]) buf tl
+| elem, buf, [] ⇒ buf ++ [ elem ]
+
+protected def Command.group := Command.groupAux ("", []) []
+
+protected def Command.ofString : String × List String → Except String Command
+| ("compile", [])       ⇒ pure Command.compile
+| ("start", [])         ⇒ pure Command.start
+| ("deps", [])          ⇒ pure Command.deps
+| ("clean", [ scale ])  ⇒ Command.clean <$> Scale.ofString scale
+| ("olean", [ scale ])  ⇒ Command.olean <$> Scale.ofString scale
+| ("app", [ template ]) ⇒ Command.app <$> Application.ofString template
+| ("", _)               ⇒ pure Command.nope
+| (cmd, _)              ⇒ throw ("unknown or malformed command “" ++ cmd ++"”")
+
+protected def Command.ofList : List String → Except String (List Command) :=
+List.mmap Command.ofString ∘ Command.group
+
+def Command.parse : List String → Except String (List Command)
+| [] ⇒ pure []
+| lst@(hd :: _) ⇒
+  if Command.reserved.elem hd then Command.ofList lst
+  else throw "in the first place should be a command"
 
 def Command.helpString :=
 "BUM Lean 4 build tool
