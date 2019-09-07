@@ -47,17 +47,17 @@ $ sudo cp bum /usr/local/bin</code>
    command = app (zero|n2o|nitro) | deps | compile
            | start | clean [this|all] | olean [this|all]</figure></code>
         <p>Where: <div><ul>
-            <li>“(a|b|c|…)” represents “a or b or c or …”</li>
-            <li>“[a|b|c|…]” represents “a or b or c or … or nothing”</li>
+            <li><b>(a|b|…)</b> represents <b>a or b …</b></li>
+            <li><b>[a|b|…]</b> represents <b>a or b … or nothing</b></li>
         </ol></div></p>
     </section>
     <section>
         <h3>CONFIG FILE</h3>
         <p>BUM uses Lean 4 parser to parse configuration files.</p>
         <p>In the configuration file should be following definitions:
-           “app”, “build”, “depsDir”, “files”.
+           <b>app</b>, <b>build</b>, <b>depsDir</b>, <b>files</b>.
            Also there can be following optional definitions:
-           “deps” and “cppLibs”.</p>
+           <b>deps</b> and <b>cppLibs</b>.</p>
         <p>This is configuration file for
            <a href="https://github.com/o89/sample-nitro">NITRO sample</a>
            application:</p>
@@ -71,19 +71,19 @@ def depsDir := "deps"
 def files := [ "sample.lean" ]</code>
         </figure>
         <p><div><ul>
-            <li>“app” is the name of the application, which should be a string.</li>
-            <li>“build” represents the application build type: “exec” or “lib”
+            <li><b>app</b> is the name of the application, which should be a string.</li>
+            <li><b>build</b> represents the application build type: <b>exec</b> or <b>lib</b>
                (which can be used as a dependency).</li>
-            <li>“depsDir” is the place where BUM stores dependencies
+            <li><b>depsDir</b> is the place where BUM stores dependencies
                 for the current application.</li>
-            <li>“files” is a list of source files.
-                Each source can be “.cpp” or “.lean” file.</li>
-            <li>“deps” is the list of dependecies.
+            <li><b>files</b> is a list of source files.
+                Each source can be <b>.cpp</b> or <b>.lean</b> file.</li>
+            <li><b>deps</b> is the list of dependecies.
                 Each dependency is represented by the following tuple: ⟨name, ⟨source, url⟩⟩.
-                “source” can be “git” or “github”.</li>
-            <li>“cppLibs” is an optional list that contains C/C++ library names
+                <b>source</b> can be <b>git</b> or <b>github</b>.</li>
+            <li><b>cppLibs</b> is an optional list that contains C/C++ library names
                 that will be linked with the application in the following way:
-                each string from this list will be added to C++ compiler as “-lname”.</li>
+                each string from this list will be added to C++ compiler as <b>-lname</b>.</li>
         </ol></div></p>
     </section>
     <section>
@@ -128,21 +128,21 @@ OK</code>
     </section>
     <section>
         <h3>START</h3>
-        <p>Start application if its build type is “exec” and it is compiled.</p>
+        <p>Start application if its build type is <b>exec</b> and it is compiled.</p>
     </section>
     <section>
         <h3>CLEAN</h3>
-        <p>Remove all “.olean”, “.cpp” (if they are generated from “.lean” files)
-           and “.o” files from current project and all project dependencies
-           if “clean” was called with the “all” options.</p>
+        <p>Remove all <b>.olean</b>, <b>.cpp</b> (if they are generated from <b>.lean</b> files)
+           and <b>.o</b> files from current project and all project dependencies
+           if <b>clean</b> was called with the <b>all</b> options.</p>
     </section>
     <section>
         <h3>OLEAN</h3>
-        <p>Generate “.olean” files.
+        <p>Generate <b>.olean</b> files.
            This is useful when the project is, for example, a mathematical library.
         </p>
         <p>
-           “this|all” option behaves in the same way as in the “clean” command.
+           <b>this|all</b> option behaves in the same way as in the <b>clean</b> command.
         </p>
     </section>
 </main><footer>
