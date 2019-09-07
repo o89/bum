@@ -53,24 +53,22 @@ $ sudo cp bum /usr/local/bin</code>
     </section>
     <section>
         <h3>CONFIG FILE</h3>
-        <p>BUM uses Lean 4 parser to parse configuration files.</p>
-        <p>In the configuration file should be following definitions:
+        <p>BUM uses Lean 4 parser to parse configuration files.
+           In the configuration file should be following definitions:
            <b>app</b>, <b>build</b>, <b>depsDir</b>, <b>files</b>.
            Also there can be following optional definitions:
-           <b>deps</b> and <b>cppLibs</b>.</p>
-        <p>This is configuration file for
+           <b>deps</b> and <b>cppLibs</b>. This is configuration file for
            <a href="https://github.com/o89/sample-nitro">NITRO sample</a>
            application:</p>
-        <figure><code>def app := "sample-nitro"
-def build := exec
-def deps := [
-  ⟨n2o, ⟨git, "https://github.com/o89/n2o"⟩⟩,
-  ⟨nitro, ⟨git, "https://github.com/o89/nitro"⟩⟩
-]
+        <figure><code>def app     := "sample-nitro"
+def build   := exec
 def depsDir := "deps"
-def files := [ "sample.lean" ]</code>
-        </figure>
-        <p><div><ul>
+def files   := [ "sample.lean" ]
+def deps    := [ ⟨n2o, ⟨git, "https://github.com/o89/n2o"⟩⟩,
+                 ⟨nitro, ⟨git, "https://github.com/o89/nitro"⟩⟩ ]
+        </code></figure>
+        <p>Options:</p>
+        <ul style="list-style-type:circle;">
             <li><b>app</b> is the name of the application, which should be a string.</li>
             <li><b>build</b> represents the application build type: <b>exec</b> or <b>lib</b>
                (which can be used as a dependency).</li>
@@ -78,18 +76,16 @@ def files := [ "sample.lean" ]</code>
                 for the current application.</li>
             <li><b>files</b> is a list of source files.
                 Each source can be <b>.cpp</b> or <b>.lean</b> file.</li>
-            <li><b>deps</b> is the list of dependecies.
-                Each dependency is represented by the following tuple: ⟨name, ⟨source, url⟩⟩.
+            <li><b>deps</b> is the list of tuples: ⟨name, ⟨source, url⟩⟩.
                 <b>source</b> can be <b>git</b> or <b>github</b>.</li>
             <li><b>cppLibs</b> is an optional list that contains C/C++ library names
                 that will be linked with the application in the following way:
                 each string from this list will be added to C++ compiler as <b>-lname</b>.</li>
-        </ol></div></p>
+        </ul>
     </section>
     <section>
         <h3>APP</h3>
-        <p>Create a predefined sample application.</p>
-        <p>
+        <p>Create a predefined sample application.
             BUM has three built-in sample applications:
             <a href="https://github.com/o89/sample-zero">zero</a>,
             <a href="https://github.com/o89/sample-n2o">n2o</a> and
