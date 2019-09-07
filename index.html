@@ -16,13 +16,11 @@
             <h3>SYNOPSIS</h3>
             <p>BUM is the simplest Lean 4 package manager and build tool.</p>
         <figure>
-        <code>
- $ git clone https://github.com/o89/bum
- $ cd bum
- $ export LEAN_HOME=/path/to/lean4
- $ make
- $ sudo cp bum /usr/local/bin
-        </code>
+        <code>$ git clone https://github.com/o89/bum
+$ cd bum
+$ export LEAN_HOME=/path/to/lean4
+$ make
+$ sudo cp bum /usr/local/bin</code>
         </figure>
         </section>
         <section>
@@ -40,7 +38,112 @@
     </article>
 </aside><main>
     <section>
+        <h3>Help</h3>
+        <p>BUM accepts a list of words using the following grammar:</p>
+        <figure><code>BUM Lean 4 build tool
 
+    invoke = bum  | bum list
+      list = []   | command [options] list
+   command = app (zero|n2o|nitro) | deps | compile
+           | start | clean [this|all] | olean [this|all]</figure></code>
+        <p>Where: <div><ul>
+            <li>“(a|b|c|…)” represents “a or b or c or …”</li>
+            <li>“[a|b|c|…]” represents “a or b or c or … or nothing”</li>
+        </ol></div></p>
+    </section>
+    <section>
+        <h3>Configuration file format</h3>
+        <p>BUM uses Lean 4 parser to parse configuration files.</p>
+        <p>In the configuration file should be following definitions:
+           “app”, “build”, “depsDir”, “files”.
+           Also there can be following optional definitions:
+           “deps” and “cppLibs”.</p>
+        <p>This is configuration file for
+           <a href="https://github.com/o89/sample-nitro">NITRO sample</a>
+           application:</p>
+        <figure><code>def app := "sample-nitro"
+def build := exec
+def deps := [
+  ⟨n2o, ⟨git, "https://github.com/o89/n2o"⟩⟩,
+  ⟨nitro, ⟨git, "https://github.com/o89/nitro"⟩⟩
+]
+def depsDir := "deps"
+def files := [ "sample.lean" ]</code>
+        </figure>
+        <p><div><ul>
+            <li>“app” is the name of the application, which should be a string.</li>
+            <li>“build” represents the application build type: “exec” or “lib”
+               (which can be used as a dependency).</li>
+            <li>“depsDir” is the place where BUM stores dependencies
+                for the current application.</li>
+            <li>“files” is a list of source files.
+                Each source can be “.cpp” or “.lean” file.</li>
+            <li>“deps” is the list of dependecies.
+                Each dependency is represented by the following tuple: ⟨name, ⟨source, url⟩⟩.
+                “source” can be “git” or “github”.</li>
+            <li>“cppLibs” is an optional list that conatins C/C++ library names
+                that will be linked with the application in the following way:
+                each string from this list will be added to C++ compiler as “-lname”.</li>
+        </ol></div></p>
+    </section>
+    <section>
+        <h3>app</h3>
+        <p>Create a predefined sample application.</p>
+        <p>
+            BUM has three built-in sample applications:
+            <a href="https://github.com/o89/sample-zero">zero</a>,
+            <a href="https://github.com/o89/sample-n2o">n2o</a> and
+            <a href="https://github.com/o89/sample-nitro">nitro</a>:
+            <figure><code>$ bum app zero
+Cloning into '.'...
+remote: Enumerating objects: 10, done.
+remote: Counting objects: 100% (10/10), done.
+remote: Compressing objects: 100% (9/9), done.
+remote: Total 10 (delta 0), reused 10 (delta 0), pack-reused 0
+Unpacking objects: 100% (10/10), done.
+OK</code>
+            </figure>
+        </p>
+    </section>
+    <section>
+        <h3>deps</h3>
+        <p>Recusively download application dependencies.</p>
+        <figure><code>$ bum deps
+==> downloading n2o (of sample-n2o)
+Cloning into 'deps/n2o'...
+remote: Enumerating objects: 144, done.
+remote: Counting objects: 100% (144/144), done.
+remote: Compressing objects: 100% (91/91), done.
+remote: Total 566 (delta 59), reused 116 (delta 39), pack-reused 422
+Receiving objects: 100% (566/566), 114.28 KiB | 436.00 KiB/s, done.
+Resolving deltas: 100% (219/219), done.
+==> dependency: n2o
+OK</code>
+        </figure>
+    </section>
+    <section>
+        <h3>compile</h3>
+        <p>Recusively compile application dependencies
+          (that have not yet been compiled) and application.</p>
+    </section>
+    <section>
+        <h3>start</h3>
+        <p>Start application if its build type is “exec” and it is compiled.</p>
+    </section>
+    <section>
+        <h3>clean</h3>
+        <p>Remove all “.olean”, “.cpp” (if they are generated from “.lean” files)
+           and “.o” files from current project and all project dependencies
+           if “clean” was called with the “all” options.</p>
+    </section>
+    <section>
+        <h3>olean</h3>
+        <p>Generate “.olean” files.
+           This is useful when the project is, for example, a mathematical library.
+        </p>
+        <p>
+           “this|all” option behaves in the same way as in the “clean” command.
+        </p>
     </section>
 </main><footer>
     Made with <span class="heart">❤</span> to N2O
