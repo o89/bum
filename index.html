@@ -44,8 +44,9 @@ $ sudo cp bum /usr/local/bin</code>
 
     invoke = bum  | bum list
       list = []   | command [options] list
-   command = app (zero|n2o|nitro) | deps | compile
-           | start | clean [this|all] | olean [this|all]</figure></code>
+   command = app (zero|n2o|nitro) | deps
+           | compile | clean [this|all]
+           | start   | olean [this|all]</figure></code>
         <p>Where: <div><ul>
             <li><b>(a|…)</b> represents <b>a or …</b></li>
             <li><b>[a|…]</b> represents <b>a or … or nothing</b></li>
