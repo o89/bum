@@ -6,7 +6,7 @@
 <title>BUM</title>
 <link rel="stylesheet" href="https://n2o.dev/blank.css?v=2" />
 </head><body><nav>
-    <a href="https://o89.github.io">Lean 4</a>
+    <a href="https://o89.github.io">LEAN</a>
 </nav><header>
     <a href="https://github.com/o89/bum"><img src="https://synrc.space/images/Synrc Neo.svg?v=1" /></a>
     <h1>BUM</h1>
@@ -38,7 +38,7 @@ $ sudo cp bum /usr/local/bin</code>
     </article>
 </aside><main>
     <section>
-        <h3>Help</h3>
+        <h3>HELP</h3>
         <p>BUM accepts a list of words using the following grammar:</p>
         <figure><code>BUM Lean 4 build tool
 
@@ -52,7 +52,7 @@ $ sudo cp bum /usr/local/bin</code>
         </ol></div></p>
     </section>
     <section>
-        <h3>Configuration file format</h3>
+        <h3>CONFIG FILE</h3>
         <p>BUM uses Lean 4 parser to parse configuration files.</p>
         <p>In the configuration file should be following definitions:
            “app”, “build”, “depsDir”, “files”.
@@ -87,7 +87,7 @@ def files := [ "sample.lean" ]</code>
         </ol></div></p>
     </section>
     <section>
-        <h3>app</h3>
+        <h3>APP</h3>
         <p>Create a predefined sample application.</p>
         <p>
             BUM has three built-in sample applications:
@@ -106,7 +106,7 @@ OK</code>
         </p>
     </section>
     <section>
-        <h3>deps</h3>
+        <h3>DEPS</h3>
         <p>Recusively download application dependencies.</p>
         <figure><code>$ bum deps
 ==> downloading n2o (of sample-n2o)
@@ -122,22 +122,22 @@ OK</code>
         </figure>
     </section>
     <section>
-        <h3>compile</h3>
+        <h3>COMPILE</h3>
         <p>Recusively compile application dependencies
           (that have not yet been compiled) and application.</p>
     </section>
     <section>
-        <h3>start</h3>
+        <h3>START</h3>
         <p>Start application if its build type is “exec” and it is compiled.</p>
     </section>
     <section>
-        <h3>clean</h3>
+        <h3>CLEAN</h3>
         <p>Remove all “.olean”, “.cpp” (if they are generated from “.lean” files)
            and “.o” files from current project and all project dependencies
            if “clean” was called with the “all” options.</p>
     </section>
     <section>
-        <h3>olean</h3>
+        <h3>OLEAN</h3>
         <p>Generate “.olean” files.
            This is useful when the project is, for example, a mathematical library.
         </p>
