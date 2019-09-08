@@ -42,7 +42,9 @@ protected def Command.ofString : String × List String → Except String Command
 | ("compile", [])       ⇒ pure Command.compile
 | ("start", [])         ⇒ pure Command.start
 | ("deps", [])          ⇒ pure Command.deps
+| ("clean", [])         ⇒ pure (Command.clean Scale.this)
 | ("clean", [ scale ])  ⇒ Command.clean <$> Scale.ofString scale
+| ("olean", [])         ⇒ pure (Command.olean Scale.this)
 | ("olean", [ scale ])  ⇒ Command.olean <$> Scale.ofString scale
 | ("app", [ template ]) ⇒ Command.app <$> Application.ofString template
 | ("", _)               ⇒ pure Command.nope
