@@ -62,8 +62,9 @@ def Command.helpString :=
 
     invoke = bum  | bum list
       list = []   | command [options] list
-   command = app (zero|n2o|nitro) | deps | compile
-           | start | clean [this|all] | olean [this|all]"
+   command = app (zero|n2o|nitro) | deps
+           | compile | clean [this|all]
+           | start   | olean [this|all]"
 
 inductive Repo
 | none
