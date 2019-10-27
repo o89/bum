@@ -32,25 +32,29 @@ def sourceCommands (tools : Tools) : Source → List String
   List.space <$>
     [ [ tools.leanc, "-c", src.path, "-o", src.obj ] ]
 
-def sourceLink (output : String) (tools : Tools) (files : List Source) :=
-List.space $ [ tools.ar, "rvs", output ] ++ Source.obj <$> files
+def sourceLink
+  (output : String) (tools : Tools)
+  (files : List Source) (flags : List String) :=
+List.space $ [ tools.ar, "rvs", output ] ++ Source.obj <$> files ++ flags
 
 def sourceCompile (output : String) (tools : Tools)
-  (files : List Source) (libs : List String) :=
+  (files : List Source) (libs flags : List String) :=
 List.space $
   pure tools.cpp ++ Lean.cppOptions ++
   [ "-o",  output ] ++
   (Source.obj <$> files).reverse ++
-  libs.reverse
+  libs.reverse ++ flags
 
-def compileCommands (conf : Project) (tools : Tools) (libs : List String) :=
+def compileCommands
+  (conf : Project) (tools : Tools)
+  (libs flags : List String) :=
 match conf.build with
 | BuildType.executable ⇒
   List.join (sourceCommands tools <$> conf.files) ++
-  [ sourceCompile conf.getBinary tools conf.files libs ]
+  [ sourceCompile conf.getBinary tools conf.files libs flags ]
 | BuildType.library ⇒
   List.join (sourceCommands tools <$> conf.files) ++
-  [ sourceLink conf.getBinary tools conf.files ]
+  [ sourceLink conf.getBinary tools conf.files flags ]
 
 def oleanCommands (conf : Project) (tools : Tools) :=
 List.join (List.filterMap (sourceOlean tools) conf.files)
@@ -61,7 +65,7 @@ def procents {α : Type} (xs : List α) : List (Nat × α) :=
 def compileProject (conf : Project) (tools : Tools) (libs : List String) : IO Unit :=
 let runPretty :=
 λ (p : Nat × String) ⇒ runCmdPretty ("(" ++ toString p.1 ++ " %)") p.2;
-let actions := runPretty <$> procents (compileCommands conf tools libs);
+let actions := runPretty <$> procents (compileCommands conf tools libs conf.cppFlags);
 IO.println ("Compiling " ++ conf.name) >> forM' id actions
 
 def silentRemove (filename : String) : IO Unit :=

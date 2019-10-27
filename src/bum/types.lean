@@ -122,12 +122,13 @@ def Source.garbage : Source → List String
   [ path ++ ".o" ]
 
 structure Project :=
-(build   : BuildType)
-(name    : String)
-(files   : List Source)
-(deps    : List Dep)
-(depsDir : String)
-(cppLibs : List String)
+(build    : BuildType)
+(name     : String)
+(files    : List Source)
+(deps     : List Dep)
+(depsDir  : String)
+(cppLibs  : List String)
+(cppFlags : List String)
 
 def Project.getBinary (conf : Project) : String :=
 match conf.build with

@@ -94,6 +94,7 @@ match getDeclValSimple id s with
 
 protected def getFiles := getStringList `files getSource
 protected def getCppLibs := getStringList `cppLibs pure
+protected def getCppFlags := getStringList `cppFlags pure
 
 protected def getBuildType (s : Syntax) : CanFail BuildType :=
 match getDeclValSimple `build s with
@@ -171,6 +172,7 @@ def readConf (filename : String) : IO Project := do
 
     files ← IO.ofExcept (getFiles node);
     cppLibs ← IO.ofExcept (getCppLibs node);
+    cppFlags ← IO.ofExcept (getCppFlags node);
 
-    pure ⟨buildType, name, files, deps, depsDir, cppLibs⟩
+    pure ⟨buildType, name, files, deps, depsDir, cppLibs, cppFlags⟩
   | _ ⇒ throw "something went wrong"
