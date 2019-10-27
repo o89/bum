@@ -1,4 +1,7 @@
-import init.system.io init.lean.parser bum.types bum.auxiliary
+import Init.System.IO
+import Init.Lean.Parser
+import bum.types
+import bum.auxiliary
 open Lean Lean.Parser
 
 abbrev CanFail := Except String
@@ -16,11 +19,11 @@ protected def getNode (name : Name) : Syntax → Option Syntax
 | _ ⇒ none
 
 protected def getArg (s : Syntax) (name : Name) : Option Syntax :=
-s.getArgs.find (getNode name)
+s.getArgs.find? (getNode name)
 
 protected def isDeclValSimple (id : Name) : Syntax → Option Syntax
 | Syntax.node `Lean.Parser.Command.declaration args ⇒ do
-  definition ← args.find (getNode `Lean.Parser.Command.def);
+  definition ← args.find? (getNode `Lean.Parser.Command.def);
 
   id' ← getArg definition `Lean.Parser.Command.declId;
   guard (id'.getIdAt 0 = id);
@@ -30,7 +33,7 @@ protected def isDeclValSimple (id : Name) : Syntax → Option Syntax
 | _ ⇒ none
 
 protected def getDeclValSimple (id : Name) (s : Syntax) :=
-s.getArgs.find (isDeclValSimple id)
+s.getArgs.find? (isDeclValSimple id)
 
 protected def getStrLit (s : Syntax) : Option String := do
   val ← s.isStrLit;
@@ -58,9 +61,9 @@ protected def isValidFileList (s : Syntax) :=
 s.isStrLit.isSome || checkAtomValue "," s
 
 protected def getExt (filename : String) : String × String :=
-let byDot := filename.split ".";
+let byDot := filename.split (λ x ⇒ x == '.');
 if byDot.length > 1 then
-  (String.join byDot.init, byDot.getLast)
+  (String.join byDot.init, byDot.getLast!)
 else (filename, "")
 
 protected def getSource (filename : String) : CanFail Source :=
@@ -76,7 +79,7 @@ let getStrLitExcept :=
 λ s ⇒ (getStrLit s).err "expected string";
 match getDeclValSimple id s with
 | some decl ⇒ do
-  val ← (getArg decl `Lean.Parser.Term.list).err
+  val ← (getArg decl `Lean.Parser.Term.listLit).err
     ("“" ++ toString id ++ "” must be a list");
 
   CanFail.guard (val.getNumArgs = 3) "invalid list";
@@ -106,10 +109,10 @@ match getDeclValSimple `build s with
 protected def getRepo : Syntax → CanFail Repo
 | Syntax.node `Lean.Parser.Term.anonymousCtor args ⇒ do
   CanFail.guard (args.size = 3) "invalid repository tuple";
-  CanFail.guard (checkAtomValue "⟨" $ args.get 0) "invalid repository tuple";
-  CanFail.guard (checkAtomValue "⟩" $ args.get 2) "invalid repository tuple";
+  CanFail.guard (checkAtomValue "⟨" $ args.get! 0) "invalid repository tuple";
+  CanFail.guard (checkAtomValue "⟩" $ args.get! 2) "invalid repository tuple";
 
-  let val := args.get 1;
+  let val := args.get! 1;
 
   let repoVar := (val.getArg 0).getIdAt 0;
   CanFail.guard (checkAtomValue "," $ val.getArg 1) "invalid repository tuple";
@@ -124,10 +127,10 @@ protected def getRepo : Syntax → CanFail Repo
 protected def getDep : Syntax → CanFail Dep
 | Syntax.node `Lean.Parser.Term.anonymousCtor args ⇒ do
   CanFail.guard (args.size = 3) "invalid package tuple";
-  CanFail.guard (checkAtomValue "⟨" $ args.get 0) "invalid package tuple";
-  CanFail.guard (checkAtomValue "⟩" $ args.get 2) "invalid package tuple";
+  CanFail.guard (checkAtomValue "⟨" $ args.get! 0) "invalid package tuple";
+  CanFail.guard (checkAtomValue "⟩" $ args.get! 2) "invalid package tuple";
 
-  let val := args.get 1;
+  let val := args.get! 1;
 
   let pkgName := (val.getArg 0).getIdAt 0;
   CanFail.guard (pkgName ≠ Name.anonymous)
@@ -141,7 +144,7 @@ protected def getDep : Syntax → CanFail Dep
 protected def getDeps (s : Syntax) : CanFail (List Dep) := do
 match getDeclValSimple `deps s with
 | some decl ⇒ do
-  val ← (getArg decl `Lean.Parser.Term.list).err
+  val ← (getArg decl `Lean.Parser.Term.listLit).err
     "dependency list must be a list";
 
   CanFail.guard (val.getNumArgs = 3)

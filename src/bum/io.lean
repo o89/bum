@@ -1,4 +1,5 @@
-import init.system.io init.system.filepath
+import Init.System.IO
+import Init.System.FilePath
 import bum.parser
 
 def Lean.deps := [ "-lpthread", "-lgmp" ]

@@ -1,4 +1,6 @@
-import init.system.io init.system.filepath bum.io
+import Init.System.IO
+import Init.System.FilePath
+import bum.io
 
 def getTools (conf : Project) : IO Tools := do
   leanHomeOpt ← IO.getEnv "LEAN_HOME";
