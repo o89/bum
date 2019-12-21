@@ -71,13 +71,15 @@ IO.println ("Compiling " ++ conf.name) >> forM' id actions
 def silentRemove (filename : String) : IO Unit :=
 do IO.remove filename; pure ()
 
-def addToLeanPath : String → IO Unit
-| "" ⇒ pure ()
-| dirpath ⇒ do
+structure Pkg :=
+(name path : String)
+
+def addToLeanPath (pkg : Pkg) : IO Unit :=
+let pkgStr := pkg.name ++ "=" ++ pkg.path; do
   path ← IO.getEnv "LEAN_PATH";
   match path with
-  | some v ⇒ IO.setEnv "LEAN_PATH" (v ++ ":" ++ dirpath)
-  | none ⇒ IO.setEnv "LEAN_PATH" dirpath;
+  | some v ⇒ IO.setEnv "LEAN_PATH" (v ++ ":" ++ pkgStr)
+  | none ⇒ IO.setEnv "LEAN_PATH" pkgStr;
   pure ()
 
 partial def resolveDepsAux (depsDir : String) (download : Bool) :
@@ -102,11 +104,12 @@ def resolveDeps (conf : Project) (download : Bool := false) : IO (List Project) 
 List.uniq Project.name <$> List.join <$>
   sequence (resolveDepsAux conf.depsDir download conf.name <$> conf.deps)
 
-def getLeanPathFromDeps (depsDir : String) (xs : List Project) : IO String :=
+def getLeanPathFromDeps (depsDir : String) (xs : List Project) : IO (List Pkg) :=
 let getSourcesDir : Project → String :=
 λ conf ⇒ [ ".", depsDir, conf.name, "src" ].joinPath;
-let dirs : List (IO String) := (IO.realPath ∘ getSourcesDir) <$> xs;
-String.intercalate ":" <$> sequence dirs
+let getPkg : Project → IO Pkg :=
+λ conf ⇒ (Pkg.mk conf.name) <$> IO.realPath (getSourcesDir conf);
+sequence (getPkg <$> xs)
 
 def getDepBinaryPath (depsDir : String) (conf : Project) : String :=
 [ ".", depsDir, conf.name, conf.getBinary ].joinPath
@@ -140,9 +143,14 @@ def buildAux (tools : Tools) (depsDir : String)
     buildAux needsRebuild tl
   else buildAux needsRebuild' tl
 
-def build (tools : Tools) (conf : Project) : IO Unit := do
+def setLeanPath (conf : Project) : IO (List Project) := do
   deps ← resolveDeps conf;
-  getLeanPathFromDeps conf.depsDir deps >>= addToLeanPath;
+  List.forM addToLeanPath <$>
+    (getLeanPathFromDeps conf.depsDir deps);
+  pure deps
+
+def build (tools : Tools) (conf : Project) : IO Unit := do
+  deps ← setLeanPath conf;
   ref ← IO.mkRef [];
   buildAux tools conf.depsDir ref false deps;
   let libs :=
@@ -154,12 +162,11 @@ def build (tools : Tools) (conf : Project) : IO Unit := do
 
 def olean (tools : Tools) (conf : Project) : IO Unit := do
   IO.println ("Generate .olean for " ++ conf.name);
-  forM' (runCmdPretty "") (oleanCommands conf tools)
+  List.forM (runCmdPretty "") (oleanCommands conf tools)
 
 def recOlean (tools : Tools) (conf : Project) : IO Unit := do
-  deps ← resolveDeps conf;
-  getLeanPathFromDeps conf.depsDir deps >>= addToLeanPath;
-  forM' (λ cur ⇒ evalDep conf.depsDir cur (olean tools cur)) deps;
+  deps ← setLeanPath conf;
+  List.forM (λ cur ⇒ evalDep conf.depsDir cur (olean tools cur)) deps;
   olean tools conf
 
 def clean (conf : Project) : IO Unit := do

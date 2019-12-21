@@ -1,14 +1,14 @@
 @[extern 2 "lean_io_run_cmd"]
-constant IO.runCmd (s : @& String) : IO UInt32 := default _
+constant IO.runCmd (s : @& String) : IO UInt32 := arbitrary _
 
 @[extern 2 "lean_io_chdir"]
-constant IO.chdir (s : @& String) : IO UInt32 := default _
+constant IO.chdir (s : @& String) : IO UInt32 := arbitrary _
 
 @[extern 2 "lean_io_remove"]
-constant IO.remove (s : @& String) : IO UInt32 := default _
+constant IO.remove (s : @& String) : IO UInt32 := arbitrary _
 
 @[extern 3 "lean_io_set_env"]
-constant IO.setEnv (name val : @& String) : IO UInt32 := default _
+constant IO.setEnv (name val : @& String) : IO UInt32 := arbitrary _
 
 def List.joinPath : List String → String :=
 String.intercalate (String.singleton System.FilePath.pathSeparator)
@@ -29,7 +29,7 @@ instance Monad.HasAndthen {α : Type}
 
 def forM' {α β : Type} [Inhabited β] {m : Type → Type} [Monad m]
   (f : α → m β) : List α → m β :=
-List.foldr (andthen ∘ f) (pure $ default β)
+List.foldr (HasAndthen.andthen ∘ f) (pure $ arbitrary β)
 
 def IO.cond (b : Bool) (action : IO Unit) : IO Unit :=
 if b then action else pure ()

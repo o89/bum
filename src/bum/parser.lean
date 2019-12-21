@@ -15,7 +15,7 @@ if ¬cond then Except.error err else Except.ok ()
 
 protected def getNode (name : Name) : Syntax → Option Syntax
 | node@(Syntax.node kind _) ⇒
-  if name = kind then some node else none
+  if name == kind then some node else none
 | _ ⇒ none
 
 protected def getArg (s : Syntax) (name : Name) : Option Syntax :=
@@ -26,7 +26,7 @@ protected def isDeclValSimple (id : Name) : Syntax → Option Syntax
   definition ← args.find? (getNode `Lean.Parser.Command.def);
 
   id' ← getArg definition `Lean.Parser.Command.declId;
-  guard (id'.getIdAt 0 = id);
+  guard (id'.getIdAt 0 == id);
 
   decl ← getArg definition `Lean.Parser.Command.declValSimple;
   pure decl
@@ -36,13 +36,14 @@ protected def getDeclValSimple (id : Name) (s : Syntax) :=
 s.getArgs.find? (isDeclValSimple id)
 
 protected def getStrLit (s : Syntax) : Option String := do
-  val ← s.isStrLit;
+  str ← getArg s `strLit;
+  val ← str.isStrLit?;
   pure (val.extract 1 (val.length - 1))
 
 protected def getString (id : Name) (s : Syntax) : CanFail String :=
 match getDeclValSimple id s with
 | some decl ⇒
-  (getArg decl `strLit >>= getStrLit).err
+  (getArg decl `Lean.Parser.Term.str >>= getStrLit).err
     ("“" ++ toString id ++ "” is not a string")
 | none ⇒ Except.error ("“" ++ toString id ++ "” not found")
 
@@ -58,7 +59,8 @@ protected def isNotComma : Syntax → Bool
 | _ ⇒ true
 
 protected def isValidFileList (s : Syntax) :=
-s.isStrLit.isSome || checkAtomValue "," s
+(Syntax.isStrLit? <$> getArg s `strLit).isSome ||
+checkAtomValue "," s
 
 protected def getExt (filename : String) : String × String :=
 let byDot := filename.split (λ x ⇒ x == '.');
@@ -89,7 +91,7 @@ match getDeclValSimple id s with
   let lst := (val.getArg 1).getArgs.toList;
   CanFail.guard (lst.all isValidFileList)
     ("“" ++ toString id ++ "” must be a list of string");
-  (lst.filter isNotComma).mmap (getStrLitExcept >=> f)
+  (lst.filter isNotComma).mapM (getStrLitExcept >=> f)
 | none ⇒ pure []
 
 protected def getFiles := getStringList `files getSource
@@ -134,7 +136,7 @@ protected def getDep : Syntax → CanFail Dep
   let val := args.get! 1;
 
   let pkgName := (val.getArg 0).getIdAt 0;
-  CanFail.guard (pkgName ≠ Name.anonymous)
+  CanFail.guard (pkgName != Name.anonymous)
     "invalid package name";
   CanFail.guard (checkAtomValue "," $ val.getArg 1)
     "invalid package tuple";
@@ -156,7 +158,7 @@ match getDeclValSimple `deps s with
     "invalid dependency list";
 
   let lst := (val.getArg 1).getArgs.toList.filter isNotComma;
-  lst.mmap getDep
+  lst.mapM getDep
 | none ⇒ pure []
 
 def readConf (filename : String) : IO Project := do

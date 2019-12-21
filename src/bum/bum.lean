@@ -6,8 +6,9 @@ def getTools (conf : Project) : IO Tools := do
   leanHomeOpt ← IO.getEnv "LEAN_HOME";
   match leanHomeOpt with
   | some leanHome ⇒ do
-    IO.setEnv "LEAN_PATH" [ leanHome, "library" ].joinPath;
-    IO.realPath [ ".", "src" ].joinPath >>= addToLeanPath;
+    addToLeanPath ⟨"Init", [ leanHome, "src", "Init" ].joinPath⟩;
+    pwd ← IO.realPath [ ".", "src" ].joinPath;
+    addToLeanPath ⟨conf.name, pwd⟩;
     IO.runCmd ("mkdir -p " ++ conf.depsDir);
     pure ⟨leanHome,
           [ leanHome, "bin", "lean" ].joinPath,
@@ -40,8 +41,7 @@ def eval : Command → IO Unit
   tools ← getTools conf;
   match scale with
   | Scale.this ⇒ do
-    deps ← resolveDeps conf;
-    getLeanPathFromDeps conf.depsDir deps >>= addToLeanPath;
+    setLeanPath conf;
     olean tools conf
   | Scale.all ⇒ recOlean tools conf
 | Command.deps ⇒ do
@@ -57,7 +57,7 @@ def eval : Command → IO Unit
 
 def evalList : List Command → IO Unit
 | [] ⇒ eval Command.help
-| xs ⇒ forM' eval xs >> IO.println "OK"
+| xs ⇒ List.forM eval xs >> IO.println "OK"
 
 def main (args : List String) :=
 match Command.parse args with

@@ -1,5 +1,5 @@
 #LEAN_DIR = # May be set here
-LEAN_PATH = $(LEAN_DIR)/library:./src
+LEAN_PATH = Init=$(LEAN_DIR)/src/Init:bum=./src/bum
 export LEAN_PATH
 
 CPP = src/bum/bindings

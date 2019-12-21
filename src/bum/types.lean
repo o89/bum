@@ -51,7 +51,7 @@ protected def Command.ofString : String × List String → Except String Command
 | (cmd, _)              ⇒ throw ("unknown or malformed command “" ++ cmd ++"”")
 
 protected def Command.ofList : List String → Except String (List Command) :=
-List.mmap Command.ofString ∘ Command.group
+List.mapM Command.ofString ∘ Command.group
 
 def Command.parse : List String → Except String (List Command)
 | [] ⇒ pure []
