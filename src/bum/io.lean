@@ -156,8 +156,6 @@ def setLeanPath (conf : Project) : IO (List Project) := do
 
 def build (tools : Tools) (conf : Project) : IO Unit := do
   deps ← setLeanPath conf;
-  leanPath ← IO.getEnv "LEAN_PATH";
-  IO.println leanPath;
   ref ← IO.mkRef [];
   buildAux tools conf.depsDir ref false deps;
   let libs :=
