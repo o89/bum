@@ -6,6 +6,7 @@ def getTools (conf : Project) : IO Tools := do
   leanHomeOpt ← IO.getEnv "LEAN_HOME";
   match leanHomeOpt with
   | some leanHome ⇒ do
+    IO.setEnv "LEAN_PATH" "";
     addToLeanPath ⟨"Init", [ leanHome, "src", "Init" ].joinPath⟩;
     pwd ← IO.realPath [ ".", "src" ].joinPath;
     addToLeanPath ⟨conf.name, pwd⟩;

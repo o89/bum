@@ -74,12 +74,17 @@ do IO.remove filename; pure ()
 structure Pkg :=
 (name path : String)
 
+def String.addToPath (dest delta : String) :=
+match dest with
+| "" ⇒ delta
+| _  ⇒ dest ++ ":" ++ delta
+
 def addToLeanPath (pkg : Pkg) : IO Unit :=
 let pkgStr := pkg.name ++ "=" ++ pkg.path; do
   path ← IO.getEnv "LEAN_PATH";
   match path with
-  | some v ⇒ IO.setEnv "LEAN_PATH" (v ++ ":" ++ pkgStr)
-  | none ⇒ IO.setEnv "LEAN_PATH" pkgStr;
+  | none    ⇒ IO.setEnv "LEAN_PATH" pkgStr
+  | some v  ⇒ IO.setEnv "LEAN_PATH" (v.addToPath pkgStr);
   pure ()
 
 partial def resolveDepsAux (depsDir : String) (download : Bool) :
@@ -109,7 +114,7 @@ let getSourcesDir : Project → String :=
 λ conf ⇒ [ ".", depsDir, conf.name, "src" ].joinPath;
 let getPkg : Project → IO Pkg :=
 λ conf ⇒ (Pkg.mk conf.name) <$> IO.realPath (getSourcesDir conf);
-sequence (getPkg <$> xs)
+List.mapM getPkg xs
 
 def getDepBinaryPath (depsDir : String) (conf : Project) : String :=
 [ ".", depsDir, conf.name, conf.getBinary ].joinPath
@@ -145,12 +150,14 @@ def buildAux (tools : Tools) (depsDir : String)
 
 def setLeanPath (conf : Project) : IO (List Project) := do
   deps ← resolveDeps conf;
-  List.forM addToLeanPath <$>
-    (getLeanPathFromDeps conf.depsDir deps);
+  leanPath ← getLeanPathFromDeps conf.depsDir deps;
+  List.forM addToLeanPath leanPath;
   pure deps
 
 def build (tools : Tools) (conf : Project) : IO Unit := do
   deps ← setLeanPath conf;
+  leanPath ← IO.getEnv "LEAN_PATH";
+  IO.println leanPath;
   ref ← IO.mkRef [];
   buildAux tools conf.depsDir ref false deps;
   let libs :=
