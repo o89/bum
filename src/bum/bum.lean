@@ -48,7 +48,9 @@ def eval : Command → IO Unit
 | Command.deps ⇒ do
   conf ← readConf config;
   deps ← resolveDeps conf true;
-  let toPrint := (String.append "==> dependency: " ∘ Project.name) <$> deps;
+  let toPrint :=
+  List.map (String.append "==> dependency: " ∘
+            Project.name ∘ Prod.snd) deps;
   if toPrint ≠ [] then
     IO.println (String.intercalate "\n" toPrint)
   else pure ()

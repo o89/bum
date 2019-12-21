@@ -87,8 +87,11 @@ let pkgStr := pkg.name ++ "=" ++ pkg.path; do
   | some v  ⇒ IO.setEnv "LEAN_PATH" (v.addToPath pkgStr);
   pure ()
 
+abbrev Path := String
+abbrev Deps := List (Path × Project)
+
 partial def resolveDepsAux (depsDir : String) (download : Bool) :
-  String → Dep → IO (List Project)
+  String → Dep → IO Deps
 | parent, dep ⇒ do
   let confPath := [ depsDir, dep.name, config ].joinPath;
 
@@ -103,29 +106,29 @@ partial def resolveDepsAux (depsDir : String) (download : Bool) :
 
   conf ← readConf confPath;
   projects ← sequence (resolveDepsAux dep.name <$> conf.deps);
-  pure (List.join projects ++ [ conf ])
+  pure (List.join projects ++ [ (dep.name, conf) ])
 
-def resolveDeps (conf : Project) (download : Bool := false) : IO (List Project) :=
-List.uniq Project.name <$> List.join <$>
-  sequence (resolveDepsAux conf.depsDir download conf.name <$> conf.deps)
+def resolveDeps (conf : Project) (download : Bool := false) : IO Deps :=
+List.uniq (Project.name ∘ Prod.snd) <$> List.join <$>
+  List.mapM (resolveDepsAux conf.depsDir download conf.name) conf.deps
 
-def getLeanPathFromDeps (depsDir : String) (xs : List Project) : IO (List Pkg) :=
-let getSourcesDir : Project → String :=
-λ conf ⇒ [ ".", depsDir, conf.name, "src" ].joinPath;
-let getPkg : Project → IO Pkg :=
-λ conf ⇒ (Pkg.mk conf.name) <$> IO.realPath (getSourcesDir conf);
+def getLeanPathFromDeps (depsDir : String) (xs : Deps) : IO (List Pkg) :=
+let getSourcesDir : Path → String :=
+λ path ⇒ [ ".", depsDir, path, "src" ].joinPath;
+let getPkg : Path × Project → IO Pkg :=
+λ ⟨path, conf⟩ ⇒ (Pkg.mk conf.name) <$> IO.realPath (getSourcesDir path);
 List.mapM getPkg xs
 
-def getDepBinaryPath (depsDir : String) (conf : Project) : String :=
-[ ".", depsDir, conf.name, conf.getBinary ].joinPath
+def getDepBinaryPath (depsDir : String) (conf : Path × Project) : String :=
+[ ".", depsDir, conf.fst, conf.snd.getBinary ].joinPath
 
-def getCppLibraries (conf : Project) : List String :=
-String.append "-l" <$> conf.cppLibs
+def getCppLibraries (conf : Path × Project) : List String :=
+String.append "-l" <$> conf.snd.cppLibs
 
-def evalDep {α : Type} (depsDir : String) (conf : Project)
+def evalDep {α : Type} (depsDir : String) (rel : Path)
   (action : IO α) : IO α := do
   cwd ← IO.realPath ".";
-  let path := [ depsDir, conf.name ].joinPath;
+  let path := [ depsDir, rel ].joinPath;
   exitv ← IO.chdir path;
   let errString := "cannot go to " ++ path;
   IO.cond (exitv ≠ 0) (throw errString);
@@ -134,21 +137,21 @@ def evalDep {α : Type} (depsDir : String) (conf : Project)
 
 def buildAux (tools : Tools) (depsDir : String)
   (doneRef : IO.Ref (List String)) :
-  Bool → List Project → IO Unit
+  Bool → Deps → IO Unit
 | _, [] ⇒ pure ()
 | needsRebuild', hd :: tl ⇒ do
   done ← doneRef.get;
-  if done.notElem hd.name then do
-    needsRebuild ← evalDep depsDir hd (do
-      needsRebuild ← or needsRebuild' <$> not <$> IO.fileExists hd.getBinary;
-      IO.cond needsRebuild (compileProject hd tools []);
+  if done.notElem hd.snd.name then do
+    needsRebuild ← evalDep depsDir hd.fst (do
+      needsRebuild ← or needsRebuild' <$> not <$> IO.fileExists hd.snd.getBinary;
+      IO.cond needsRebuild (compileProject hd.snd tools []);
       pure needsRebuild);
 
-    doneRef.set (hd.name :: done);
+    doneRef.set (hd.snd.name :: done);
     buildAux needsRebuild tl
   else buildAux needsRebuild' tl
 
-def setLeanPath (conf : Project) : IO (List Project) := do
+def setLeanPath (conf : Project) : IO Deps := do
   deps ← resolveDeps conf;
   leanPath ← getLeanPathFromDeps conf.depsDir deps;
   List.forM addToLeanPath leanPath;
@@ -171,7 +174,10 @@ def olean (tools : Tools) (conf : Project) : IO Unit := do
 
 def recOlean (tools : Tools) (conf : Project) : IO Unit := do
   deps ← setLeanPath conf;
-  List.forM (λ cur ⇒ evalDep conf.depsDir cur (olean tools cur)) deps;
+  List.forM
+    (λ (cur : Path × Project) ⇒
+      evalDep conf.depsDir cur.fst (olean tools cur.snd))
+    deps;
   olean tools conf
 
 def clean (conf : Project) : IO Unit := do
@@ -182,5 +188,8 @@ def clean (conf : Project) : IO Unit := do
 
 def cleanRec (conf : Project) : IO Unit := do
   deps ← resolveDeps conf;
-  forM' (λ cur ⇒ evalDep conf.depsDir cur (clean cur)) deps;
+  List.forM
+    (λ (cur : Path × Project) ⇒
+      evalDep conf.depsDir cur.fst (clean cur.snd))
+    deps;
   clean conf
