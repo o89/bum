@@ -2,10 +2,14 @@ import Init.System.IO
 import Init.System.FilePath
 import bum.parser
 
-def Lean.deps := [ "-lpthread", "-lgmp" ]
+def Lean.deps := [ "-lpthread", "-lgmp", "-ldl" ]
+-- bin/leanc:
+-- NOTE: leanstatic and leanstdlib are cyclically dependent
 def Lean.libraries (leanHome : String) := 
 List.joinPath <$>
   [ [ leanHome, "bin", "libleanstatic.a" ],
+    [ leanHome, "bin", "libleanstdlib.a" ],
+    [ leanHome, "bin", "libleanstatic.a" ],
     [ leanHome, "bin", "libleanstdlib.a" ] ]
 def Lean.cppOptions := [ "-fPIC", "-Wno-unused-command-line-argument" ]
 
@@ -15,7 +19,7 @@ def runCmdPretty (additionalInfo s : String) : IO Unit := do
   IO.println ("==> " ++ s ++ " " ++ additionalInfo);
   exitv ← IO.runCmd s;
   let errorStr := "process exited with code " ++ toString exitv;
-  IO.cond (exitv ≠ 0) (throw errorStr)
+  IO.cond (exitv ≠ 0) $ throw (IO.Error.userError errorStr)
 
 def sourceOlean (tools : Tools) : Source → Option (List String)
 | src@(Source.lean path) ⇒
@@ -102,7 +106,7 @@ partial def resolveDepsAux (depsDir : String) (download : Bool) :
     let err :=
       "downloading of “" ++ dep.name ++
       "” failed with code " ++ toString exitv;
-    IO.cond (exitv ≠ 0) (throw err));
+    IO.cond (exitv ≠ 0) $ throw (IO.Error.userError err));
 
   conf ← readConf confPath;
   projects ← sequence (resolveDepsAux dep.name <$> conf.deps);
@@ -131,7 +135,7 @@ def evalDep {α : Type} (depsDir : String) (rel : Path)
   let path := [ depsDir, rel ].joinPath;
   exitv ← IO.chdir path;
   let errString := "cannot go to " ++ path;
-  IO.cond (exitv ≠ 0) (throw errString);
+  IO.cond (exitv ≠ 0) $ throw (IO.Error.userError errString);
   val ← action; IO.chdir cwd;
   pure val
 

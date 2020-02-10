@@ -15,7 +15,7 @@ def getTools (conf : Project) : IO Tools := do
           [ leanHome, "bin", "lean" ].joinPath,
           [ leanHome, "bin", "leanc" ].joinPath,
           "ar", "c++"⟩
-  | none ⇒ throw "LEAN_HOME not found"
+  | none ⇒ throw (IO.Error.userError "LEAN_HOME not found")
 
 def eval : Command → IO Unit
 | Command.start ⇒ do

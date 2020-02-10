@@ -19,11 +19,11 @@ protected def getNode (name : Name) : Syntax → Option Syntax
 | _ ⇒ none
 
 protected def getArg (s : Syntax) (name : Name) : Option Syntax :=
-s.getArgs.find? (getNode name)
+s.getArgs.findSome? (getNode name)
 
 protected def isDeclValSimple (id : Name) : Syntax → Option Syntax
 | Syntax.node `Lean.Parser.Command.declaration args ⇒ do
-  definition ← args.find? (getNode `Lean.Parser.Command.def);
+  definition ← args.findSome? (getNode `Lean.Parser.Command.def);
 
   id' ← getArg definition `Lean.Parser.Command.declId;
   guard (id'.getIdAt 0 == id);
@@ -33,12 +33,10 @@ protected def isDeclValSimple (id : Name) : Syntax → Option Syntax
 | _ ⇒ none
 
 protected def getDeclValSimple (id : Name) (s : Syntax) :=
-s.getArgs.find? (isDeclValSimple id)
+s.getArgs.findSome? (isDeclValSimple id)
 
-protected def getStrLit (s : Syntax) : Option String := do
-  str ← getArg s `strLit;
-  val ← str.isStrLit?;
-  pure (val.extract 1 (val.length - 1))
+protected def getStrLit (s : Syntax) : Option String :=
+getArg s `strLit >>= Syntax.isStrLit?
 
 protected def getString (id : Name) (s : Syntax) : CanFail String :=
 match getDeclValSimple id s with
@@ -177,4 +175,4 @@ def readConf (filename : String) : IO Project := do
     cppFlags ← IO.ofExcept (getCppFlags node);
 
     pure ⟨buildType, name, files, deps, depsDir, cppLibs, cppFlags⟩
-  | _ ⇒ throw "something went wrong"
+  | _ ⇒ throw (IO.Error.userError "something went wrong")
