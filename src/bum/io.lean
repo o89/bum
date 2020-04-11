@@ -22,17 +22,17 @@ def runCmdPretty (additionalInfo s : String) : IO Unit := do
   IO.cond (exitv ≠ 0) $ throw (IO.Error.userError errorStr)
 
 def sourceOlean (tools : Tools) : Source → Option (List String)
-| src@(Source.lean path) ⇒
+| src@(Source.lean path) =>
   some [ [ tools.lean, "--make", src.path ].space ]
-| _ ⇒ none
+| _ => none
 
 def sourceCommands (tools : Tools) : Source → List String
-| src@(Source.lean path) ⇒
+| src@(Source.lean path) =>
   List.space <$>
     [ [ tools.lean, "--make", src.path ],
       [ tools.lean, "-c", src.asCpp, src.path ],
       [ tools.leanc, "-c", src.asCpp, "-o", src.obj ] ]
-| src@(Source.cpp path) ⇒
+| src@(Source.cpp path) =>
   List.space <$>
     [ [ tools.leanc, "-c", src.path, "-o", src.obj ] ]
 
@@ -53,10 +53,10 @@ def compileCommands
   (conf : Project) (tools : Tools)
   (libs flags : List String) :=
 match conf.build with
-| BuildType.executable ⇒
+| BuildType.executable =>
   List.join (sourceCommands tools <$> conf.files) ++
   [ sourceCompile conf.getBinary tools conf.files libs flags ]
-| BuildType.library ⇒
+| BuildType.library =>
   List.join (sourceCommands tools <$> conf.files) ++
   [ sourceLink conf.getBinary tools conf.files flags ]
 
@@ -64,11 +64,11 @@ def oleanCommands (conf : Project) (tools : Tools) :=
 List.join (List.filterMap (sourceOlean tools) conf.files)
 
 def procents {α : Type} (xs : List α) : List (Nat × α) :=
-(λ (p : Nat × α) ⇒ (p.1 * 100 / xs.length, p.2)) <$> xs.enum
+(λ (p : Nat × α) => (p.1 * 100 / xs.length, p.2)) <$> xs.enum
 
 def compileProject (conf : Project) (tools : Tools) (libs : List String) : IO Unit :=
 let runPretty :=
-λ (p : Nat × String) ⇒ runCmdPretty ("(" ++ toString p.1 ++ " %)") p.2;
+λ (p : Nat × String) => runCmdPretty ("(" ++ toString p.1 ++ " %)") p.2;
 let actions := runPretty <$> procents (compileCommands conf tools libs conf.cppFlags);
 IO.println ("Compiling " ++ conf.name) >> forM' id actions
 
@@ -80,15 +80,15 @@ structure Pkg :=
 
 def String.addToPath (dest delta : String) :=
 match dest with
-| "" ⇒ delta
-| _  ⇒ dest ++ ":" ++ delta
+| "" => delta
+| _  => dest ++ ":" ++ delta
 
 def addToLeanPath (pkg : Pkg) : IO Unit :=
 let pkgStr := pkg.name ++ "=" ++ pkg.path; do
   path ← IO.getEnv "LEAN_PATH";
   match path with
-  | none    ⇒ IO.setEnv "LEAN_PATH" pkgStr
-  | some v  ⇒ IO.setEnv "LEAN_PATH" (v.addToPath pkgStr);
+  | none    => IO.setEnv "LEAN_PATH" pkgStr
+  | some v  => IO.setEnv "LEAN_PATH" (v.addToPath pkgStr);
   pure ()
 
 abbrev Path := String
@@ -96,7 +96,7 @@ abbrev Deps := List (Path × Project)
 
 partial def resolveDepsAux (depsDir : String) (download : Bool) :
   String → Dep → IO Deps
-| parent, dep ⇒ do
+| parent, dep => do
   let confPath := [ depsDir, dep.name, config ].joinPath;
 
   isThere ← IO.fileExists confPath;
@@ -118,9 +118,9 @@ List.uniq (Project.name ∘ Prod.snd) <$> List.join <$>
 
 def getLeanPathFromDeps (depsDir : String) (xs : Deps) : IO (List Pkg) :=
 let getSourcesDir : Path → String :=
-λ path ⇒ [ ".", depsDir, path, "src" ].joinPath;
+λ path => [ ".", depsDir, path, "src" ].joinPath;
 let getPkg : Path × Project → IO Pkg :=
-λ ⟨path, conf⟩ ⇒ (Pkg.mk conf.name) <$> IO.realPath (getSourcesDir path);
+λ ⟨path, conf⟩ => (Pkg.mk conf.name) <$> IO.realPath (getSourcesDir path);
 List.mapM getPkg xs
 
 def getDepBinaryPath (depsDir : String) (conf : Path × Project) : String :=
@@ -142,8 +142,8 @@ def evalDep {α : Type} (depsDir : String) (rel : Path)
 def buildAux (tools : Tools) (depsDir : String)
   (doneRef : IO.Ref (List String)) :
   Bool → Deps → IO Unit
-| _, [] ⇒ pure ()
-| needsRebuild', hd :: tl ⇒ do
+| _, [] => pure ()
+| needsRebuild', hd :: tl => do
   done ← doneRef.get;
   if done.notElem hd.snd.name then do
     needsRebuild ← evalDep depsDir hd.fst (do
@@ -179,7 +179,7 @@ def olean (tools : Tools) (conf : Project) : IO Unit := do
 def recOlean (tools : Tools) (conf : Project) : IO Unit := do
   deps ← setLeanPath conf;
   List.forM
-    (λ (cur : Path × Project) ⇒
+    (λ (cur : Path × Project) =>
       evalDep conf.depsDir cur.fst (olean tools cur.snd))
     deps;
   olean tools conf
@@ -193,7 +193,7 @@ def clean (conf : Project) : IO Unit := do
 def cleanRec (conf : Project) : IO Unit := do
   deps ← resolveDeps conf;
   List.forM
-    (λ (cur : Path × Project) ⇒
+    (λ (cur : Path × Project) =>
       evalDep conf.depsDir cur.fst (clean cur.snd))
     deps;
   clean conf
