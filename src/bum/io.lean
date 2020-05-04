@@ -73,7 +73,7 @@ let actions := runPretty <$> procents (compileCommands conf tools libs conf.cppF
 IO.println ("Compiling " ++ conf.name) >> forM' id actions
 
 def silentRemove (filename : String) : IO Unit :=
-do IO.remove filename; pure ()
+IO.remove filename >>= λ _ => pure ()
 
 structure Pkg :=
 (name path : String)
@@ -83,12 +83,12 @@ match dest with
 | "" => delta
 | _  => dest ++ ":" ++ delta
 
-def addToLeanPath (pkg : Pkg) : IO Unit :=
-let pkgStr := pkg.name ++ "=" ++ pkg.path; do
+def addToLeanPath (pkg : Pkg) : IO Unit := do
+  let pkgStr := pkg.name ++ "=" ++ pkg.path;
   path ← IO.getEnv "LEAN_PATH";
-  match path with
-  | none    => IO.setEnv "LEAN_PATH" pkgStr
-  | some v  => IO.setEnv "LEAN_PATH" (v.addToPath pkgStr);
+  _ ← match path with
+  | none   => IO.setEnv "LEAN_PATH" pkgStr
+  | some v => IO.setEnv "LEAN_PATH" (v.addToPath pkgStr);
   pure ()
 
 abbrev Path := String
@@ -136,7 +136,7 @@ def evalDep {α : Type} (depsDir : String) (rel : Path)
   exitv ← IO.chdir path;
   let errString := "cannot go to " ++ path;
   IO.cond (exitv ≠ 0) $ throw (IO.Error.userError errString);
-  val ← action; IO.chdir cwd;
+  val ← action; _ ← IO.chdir cwd;
   pure val
 
 def buildAux (tools : Tools) (depsDir : String)

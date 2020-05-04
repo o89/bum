@@ -6,11 +6,11 @@ def getTools (conf : Project) : IO Tools := do
   leanHomeOpt ← IO.getEnv "LEAN_HOME";
   match leanHomeOpt with
   | some leanHome => do
-    IO.setEnv "LEAN_PATH" "";
+    _ ← IO.setEnv "LEAN_PATH" "";
     addToLeanPath ⟨"Init", [ leanHome, "src", "Init" ].joinPath⟩;
     pwd ← IO.realPath [ ".", "src" ].joinPath;
     addToLeanPath ⟨conf.name, pwd⟩;
-    IO.runCmd ("mkdir -p " ++ conf.depsDir);
+    _ ← IO.runCmd ("mkdir -p " ++ conf.depsDir);
     pure ⟨leanHome,
           [ leanHome, "bin", "lean" ].joinPath,
           [ leanHome, "bin", "leanc" ].joinPath,
@@ -24,7 +24,7 @@ def eval : Command → IO Unit
   | BuildType.executable => do
     let name := conf.getBinary;
     IO.println ("Starting: " ++ name);
-    IO.runCmd [".", name].joinPath;
+    _ ← IO.runCmd [".", name].joinPath;
     pure ()
   | BuildType.library =>
     IO.println "Cannot start a library"
@@ -42,7 +42,7 @@ def eval : Command → IO Unit
   tools ← getTools conf;
   match scale with
   | Scale.this => do
-    setLeanPath conf;
+    _ ← setLeanPath conf;
     olean tools conf
   | Scale.all => recOlean tools conf
 | Command.deps => do
@@ -55,7 +55,7 @@ def eval : Command → IO Unit
     IO.println (String.intercalate "\n" toPrint)
   else pure ()
 | Command.help => IO.println Command.helpString
-| Command.app app => do IO.runCmd (Repo.cmd "." app.toRepo); pure ()
+| Command.app app => IO.runCmd (Repo.cmd "." app.toRepo) >>= λ _ => pure ()
 | Command.nope => pure ()
 
 def evalList : List Command → IO Unit

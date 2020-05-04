@@ -25,7 +25,7 @@ def sequence {α : Type} {m : Type → Type} [Monad m] : List (m α) → m (List
 -- ???
 instance Monad.HasAndthen {α : Type}
   {m : Type → Type} [Monad m] : HasAndthen (m α) :=
-⟨λ a b => do a; b⟩
+⟨λ a b => a >>= λ _ => b⟩
 
 def forM' {α β : Type} [Inhabited β] {m : Type → Type} [Monad m]
   (f : α → m β) : List α → m β :=
