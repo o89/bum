@@ -2,15 +2,12 @@ import Init.System.IO
 import Init.System.FilePath
 import bum.parser
 
-def Lean.deps := [ "-lpthread", "-lgmp", "-ldl" ]
 -- bin/leanc:
--- NOTE: leanstatic and leanstdlib are cyclically dependent
-def Lean.libraries (leanHome : String) := 
-List.joinPath <$>
-  [ [ leanHome, "bin", "libleanstatic.a" ],
-    [ leanHome, "bin", "libleanstdlib.a" ],
-    [ leanHome, "bin", "libleanstatic.a" ],
-    [ leanHome, "bin", "libleanstdlib.a" ] ]
+-- NOT: libleancpp and libInit are cyclically dependent
+def Lean.deps := [ "-lpthread", "-ldl", "-lgmp",
+                   "-lLean", "-lStd", "-lInit", "-lleancpp",
+                   "-lLean", "-lStd", "-lInit", "-lleancpp" ]
+
 def Lean.cppOptions := [ "-fPIC", "-Wno-unused-command-line-argument" ]
 
 def config := "bum.config"
@@ -23,18 +20,23 @@ def runCmdPretty (additionalInfo s : String) : IO Unit := do
 
 def sourceOlean (tools : Tools) : Source → Option (List String)
 | src@(Source.lean path) =>
-  some [ [ tools.lean, "--make", src.path ].space ]
+  some [ [ tools.lean, "-o", src.asOlean, src.path ].space ]
 | _ => none
+
+def getInclude (tools : Tools) : String :=
+"-I" ++ [ tools.leanBinDir, "include" ].joinPath
 
 def sourceCommands (tools : Tools) : Source → List String
 | src@(Source.lean path) =>
   List.space <$>
-    [ [ tools.lean, "--make", src.path ],
-      [ tools.lean, "-c", src.asCpp, src.path ],
-      [ tools.leanc, "-c", src.asCpp, "-o", src.obj ] ]
+    [ [ tools.lean, "-o", src.asOlean, src.path ],
+      [ "(", "cd", "src", ";", tools.lean,
+        "-c", ["..", src.asCpp].joinPath,
+              ["..", src.path].joinPath, ")" ],
+      [ tools.cpp, getInclude tools, "-c", src.asCpp, "-o", src.obj ] ]
 | src@(Source.cpp path) =>
   List.space <$>
-    [ [ tools.leanc, "-c", src.path, "-o", src.obj ] ]
+    [ [ tools.cpp, getInclude tools, "-c", src.path, "-o", src.obj ] ]
 
 def sourceLink
   (output : String) (tools : Tools)
@@ -47,7 +49,8 @@ List.space $
   pure tools.cpp ++ Lean.cppOptions ++
   [ "-o",  output ] ++
   (Source.obj <$> files).reverse ++
-  libs.reverse ++ flags
+  libs.reverse ++ flags ++
+  [ "-L" ++ tools.leanBinDir ++ "/lib/lean" ]
 
 def compileCommands
   (conf : Project) (tools : Tools)
@@ -69,7 +72,8 @@ def procents {α : Type} (xs : List α) : List (Nat × α) :=
 def compileProject (conf : Project) (tools : Tools) (libs : List String) : IO Unit :=
 let runPretty :=
 λ (p : Nat × String) => runCmdPretty ("(" ++ toString p.1 ++ " %)") p.2;
-let actions := runPretty <$> procents (compileCommands conf tools libs conf.cppFlags);
+let actions := runPretty <$>
+  procents (compileCommands conf tools libs conf.cppFlags);
 IO.println ("Compiling " ++ conf.name) >> forM' id actions
 
 def silentRemove (filename : String) : IO Unit :=
@@ -83,12 +87,11 @@ match dest with
 | "" => delta
 | _  => dest ++ ":" ++ delta
 
-def addToLeanPath (pkg : Pkg) : IO Unit := do
-  let pkgStr := pkg.name ++ "=" ++ pkg.path;
+def addToLeanPath (u : String) : IO Unit := do
   path ← IO.getEnv "LEAN_PATH";
   _ ← match path with
-  | none   => IO.setEnv "LEAN_PATH" pkgStr
-  | some v => IO.setEnv "LEAN_PATH" (v.addToPath pkgStr);
+  | none   => IO.setEnv "LEAN_PATH" u
+  | some v => IO.setEnv "LEAN_PATH" (v.addToPath u);
   pure ()
 
 abbrev Path := String
@@ -116,11 +119,11 @@ def resolveDeps (conf : Project) (download : Bool := false) : IO Deps :=
 List.uniq (Project.name ∘ Prod.snd) <$> List.join <$>
   List.mapM (resolveDepsAux conf.depsDir download conf.name) conf.deps
 
-def getLeanPathFromDeps (depsDir : String) (xs : Deps) : IO (List Pkg) :=
+def getLeanPathFromDeps (depsDir : String) (xs : Deps) : IO (List String) :=
 let getSourcesDir : Path → String :=
 λ path => [ ".", depsDir, path, "src" ].joinPath;
-let getPkg : Path × Project → IO Pkg :=
-λ ⟨path, conf⟩ => (Pkg.mk conf.name) <$> IO.realPath (getSourcesDir path);
+let getPkg : Path × Project → IO String :=
+λ ⟨path, conf⟩ => IO.realPath (getSourcesDir path);
 List.mapM getPkg xs
 
 def getDepBinaryPath (depsDir : String) (conf : Path × Project) : String :=
@@ -168,7 +171,6 @@ def build (tools : Tools) (conf : Project) : IO Unit := do
   let libs :=
     Lean.deps ++
     List.join (getCppLibraries <$> deps) ++
-    Lean.libraries tools.leanHome ++
     getDepBinaryPath conf.depsDir <$> deps;
   compileProject conf tools libs
 

@@ -1,6 +1,6 @@
-#include "runtime/object.h"
-#include "runtime/io.h"
-#include "unistd.h"
+#include "lean/object.h"
+#include "lean/io.h"
+#include <unistd.h>
 
 typedef lean::object obj;
 

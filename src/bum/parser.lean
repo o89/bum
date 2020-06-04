@@ -1,5 +1,5 @@
 import Init.System.IO
-import Init.Lean.Parser
+import Lean.Parser
 import bum.types
 import bum.auxiliary
 open Lean Lean.Parser

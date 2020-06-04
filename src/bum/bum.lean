@@ -4,18 +4,19 @@ import bum.io
 
 def getTools (conf : Project) : IO Tools := do
   leanHomeOpt ← IO.getEnv "LEAN_HOME";
-  match leanHomeOpt with
-  | some leanHome => do
+  leanBinDirOpt ← IO.getEnv "LEAN_BINDIR";
+
+  match leanHomeOpt, leanBinDirOpt with
+  | some leanHome, some leanBinDir => do
     _ ← IO.setEnv "LEAN_PATH" "";
-    addToLeanPath ⟨"Init", [ leanHome, "src", "Init" ].joinPath⟩;
-    pwd ← IO.realPath [ ".", "src" ].joinPath;
-    addToLeanPath ⟨conf.name, pwd⟩;
+    addToLeanPath [ leanBinDir, "lib", "lean" ].joinPath;
+    src ← IO.realPath [ ".", "src" ].joinPath;
+    addToLeanPath src;
     _ ← IO.runCmd ("mkdir -p " ++ conf.depsDir);
-    pure ⟨leanHome,
-          [ leanHome, "bin", "lean" ].joinPath,
-          [ leanHome, "bin", "leanc" ].joinPath,
+    pure ⟨leanHome, leanBinDir,
+          [ leanBinDir, "bin", "lean" ].joinPath,
           "ar", "c++"⟩
-  | none => throw (IO.Error.userError "LEAN_HOME not found")
+  | _, _ => throw (IO.Error.userError "LEAN_HOME or LEAN_BINDIR not found")
 
 def eval : Command → IO Unit
 | Command.start => do

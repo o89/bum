@@ -107,13 +107,13 @@ def Source.path : Source → String
 | Source.lean path => path ++ ".lean"
 | Source.cpp path  => path ++ ".cpp"
 
-def Source.asCpp : Source → String
-| Source.lean path => path ++ ".cpp"
-| Source.cpp path  => path ++ ".cpp"
+def Source.subst (ext : String) : Source → String
+| Source.lean path => path ++ ext
+| Source.cpp  path => path ++ ext
 
-def Source.obj : Source → String
-| Source.lean path => path ++ ".o"
-| Source.cpp path  => path ++ ".o"
+def Source.asOlean := Source.subst ".olean"
+def Source.asCpp   := Source.subst ".cpp"
+def Source.obj     := Source.subst ".o"
 
 def Source.garbage : Source → List String
 | Source.lean path =>
@@ -145,4 +145,4 @@ def Val.getString : Val → Except String String
 | _            => Except.error "expected string"
 
 structure Tools :=
-(leanHome lean leanc ar cpp : String)
+(leanHome leanBinDir lean ar cpp : String)
