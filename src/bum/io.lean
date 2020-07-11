@@ -4,7 +4,7 @@ import bum.parser
 
 -- bin/leanc:
 -- NOT: libleancpp and libInit are cyclically dependent
-def Lean.deps := [ "-lpthread", "-ldl", "-lgmp",
+def Lean.deps := [ "-lpthread", "-ldl", "-lgmp", "-lStd",
                    "-lLean", "-lStd", "-lInit", "-lleancpp",
                    "-lLean", "-lStd", "-lInit", "-lleancpp" ]
 
