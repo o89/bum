@@ -113,9 +113,9 @@ protected def getRepo : Syntax → CanFail Repo
 
   let val := args.get! 1;
 
-  let repoVar := (val.getArg 0).getIdAt 0;
+  let repoVar := (val.getArg 0).getId;
   CanFail.guard (checkAtomValue "," $ val.getArg 1) "invalid repository tuple";
-  url ← (getStrLit $ val.getArg 2).err "URI must be a string";
+  url ← (Syntax.isStrLit? $ val.getArg 2).err "URI must be a string";
 
   match repoVar with
   | `git    => pure (Repo.git url)
@@ -131,7 +131,7 @@ protected def getDep : Syntax → CanFail Dep
 
   let val := args.get! 1;
 
-  let pkgName := (val.getArg 0).getIdAt 0;
+  let pkgName := (val.getArg 0).getId;
   CanFail.guard (pkgName != Name.anonymous)
     "invalid package name";
   CanFail.guard (checkAtomValue "," $ val.getArg 1)
