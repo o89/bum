@@ -40,9 +40,7 @@ getArg s `strLit >>= Syntax.isStrLit?
 
 protected def getString (id : Name) (s : Syntax) : CanFail String :=
 match getDeclValSimple id s with
-| some decl =>
-  (getArg decl `Lean.Parser.Term.str >>= getStrLit).err
-    ("“" ++ toString id ++ "” is not a string")
+| some decl => (getStrLit decl).err ("“" ++ toString id ++ "” is not a string")
 | none => Except.error ("“" ++ toString id ++ "” not found")
 
 protected def getApplicationName := getString `app
@@ -57,7 +55,7 @@ protected def isNotComma : Syntax → Bool
 | _ => true
 
 protected def isValidFileList (s : Syntax) :=
-(Syntax.isStrLit? <$> getArg s `strLit).isSome ||
+(Syntax.isStrLit? s).isSome ||
 checkAtomValue "," s
 
 protected def getExt (filename : String) : String × String :=
@@ -76,7 +74,7 @@ match getExt filename with
 protected def getStringList {α : Type} (id : Name)
   (f : String → CanFail α) (s : Syntax) : CanFail (List α) :=
 let getStrLitExcept :=
-λ s => (getStrLit s).err "expected string";
+λ s => (Syntax.isStrLit? s).err "expected string";
 match getDeclValSimple id s with
 | some decl => do
   val ← (getArg decl `Lean.Parser.Term.listLit).err
@@ -99,9 +97,9 @@ protected def getCppFlags := getStringList `cppFlags pure
 protected def getBuildType (s : Syntax) : CanFail BuildType :=
 match getDeclValSimple `build s with
 | some decl => do
-  val ← (getArg decl `Lean.Parser.Term.id).err
+  val ← (decl.getArgs.find? Syntax.isIdent).err
     "build type must be an atom";
-  match val.getIdAt 0 with
+  match val.getId with
   | `exec => pure BuildType.executable
   | `lib => pure BuildType.library
   | x => throw ("“" ++ toString x ++ "” is unknown build type")
@@ -163,16 +161,19 @@ def readConf (filename : String) : IO Project := do
   env ← mkEmptyEnvironment;
   s ← parseFile env filename;
   match s with
-  | node@(Syntax.node `null args) => do
-    name ← IO.ofExcept (getApplicationName node);
-    depsDir ← IO.ofExcept (getDepsDir node);
+  | node@(Syntax.node `Lean.Parser.Module.module _) => do  
+    -- TODO: why 1?
+    let decls := node.getArgs.get! 1;
 
-    buildType ← IO.ofExcept (getBuildType node);
-    deps ← IO.ofExcept (getDeps node);
+    name ← IO.ofExcept (getApplicationName decls);
+    depsDir ← IO.ofExcept (getDepsDir decls);
 
-    files ← IO.ofExcept (getFiles node);
-    cppLibs ← IO.ofExcept (getCppLibs node);
-    cppFlags ← IO.ofExcept (getCppFlags node);
+    buildType ← IO.ofExcept (getBuildType decls);
+    deps ← IO.ofExcept (getDeps decls);
+
+    files ← IO.ofExcept (getFiles decls);
+    cppLibs ← IO.ofExcept (getCppLibs decls);
+    cppFlags ← IO.ofExcept (getCppFlags decls);
 
     pure ⟨buildType, name, files, deps, depsDir, cppLibs, cppFlags⟩
   | _ => throw (IO.Error.userError "something went wrong")

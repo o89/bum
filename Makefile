@@ -1,6 +1,5 @@
-#LEAN_DIR = # May be set here
-STAGE0.5 = $(shell find $(LEAN_DIR) -name stage0.5)
-LEAN_PATH = $(STAGE0.5)/lib/lean/:$(shell realpath src)
+#LEAN_HOME = # May be set here
+LEAN_PATH = $(LEAN_HOME)/lib/lean/:$(shell realpath src)
 export LEAN_PATH
 
 CPP = src/bum/bindings
@@ -15,16 +14,16 @@ LIBS = -lleancpp -lInit -lStd -lLean -lleancpp -lInit -lStd -lLean -lgmp -ldl
 RES = bum
 
 $(RES): $(addsuffix .o,$(LEAN) $(CPP))
-	$(CXX) -L$(STAGE0.5)/lib/lean -o $(RES) $(CFLAGS) $(OBJS) $(LIBS)
+	$(CXX) -L$(LEAN_HOME)/lib/lean -o $(RES) $(CFLAGS) $(OBJS) $(LIBS)
 
 $(addsuffix .o,$(LEAN) $(CPP)): %.o: %.cpp
-	$(CXX) -c -I$(STAGE0.5)/include $< -o $@
+	$(CXX) -c -I$(LEAN_HOME)/include $< -o $@
 
 $(addsuffix .cpp,$(LEAN)): %.cpp: %.olean
-	(cd src; $(STAGE0.5)/bin/lean -c $(@:src/%=%) $(patsubst src/%,%,$(<:.olean=.lean)))
+	(cd src; $(LEAN_HOME)/bin/lean -c $(@:src/%=%) $(patsubst src/%,%,$(<:.olean=.lean)))
 
 $(addsuffix .olean,$(LEAN)): %.olean: %.lean
-	$(STAGE0.5)/bin/lean -o $(<:.lean=.olean) $<
+	$(LEAN_HOME)/bin/lean -o $(<:.lean=.olean) $<
 
 clean:
 	rm -f $(addsuffix .cpp,$(LEAN)) $(addsuffix .olean,$(LEAN))

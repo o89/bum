@@ -37,7 +37,7 @@ if b then action else pure ()
 def List.uniqAux {α β : Type} [HasBeq β] (f : α → β) : List α → List α → List α
 | buff, [] => buff
 | buff, hd :: tl =>
-  if (f <$> buff).elem (f hd) then
+  if (List.map f buff).elem (f hd) then
     List.uniqAux buff tl
   else List.uniqAux (hd :: buff) tl
 

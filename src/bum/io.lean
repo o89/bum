@@ -24,56 +24,56 @@ def sourceOlean (tools : Tools) : Source → Option (List String)
 | _ => none
 
 def getInclude (tools : Tools) : String :=
-"-I" ++ [ tools.leanBinDir, "include" ].joinPath
+"-I" ++ [ tools.leanHome, "include" ].joinPath
 
 def sourceCommands (tools : Tools) : Source → List String
 | src@(Source.lean path) =>
-  List.space <$>
+  List.map List.space
     [ [ tools.lean, "-o", src.asOlean, src.path ],
       [ "(", "cd", "src", ";", tools.lean,
         "-c", ["..", src.asCpp].joinPath,
               ["..", src.path].joinPath, ")" ],
       [ tools.cpp, getInclude tools, "-c", src.asCpp, "-o", src.obj ] ]
 | src@(Source.cpp path) =>
-  List.space <$>
+  List.map List.space
     [ [ tools.cpp, getInclude tools, "-c", src.path, "-o", src.obj ] ]
 
 def sourceLink
   (output : String) (tools : Tools)
   (files : List Source) (flags : List String) :=
-List.space $ [ tools.ar, "rvs", output ] ++ Source.obj <$> files ++ flags
+List.space ([ tools.ar, "rvs", output ] ++ List.map Source.obj files ++ flags)
 
 def sourceCompile (output : String) (tools : Tools)
   (files : List Source) (libs flags : List String) :=
 List.space $
-  pure tools.cpp ++ Lean.cppOptions ++
+  [ tools.cpp ] ++ Lean.cppOptions ++
   [ "-o",  output ] ++
-  (Source.obj <$> files).reverse ++
+  (List.map Source.obj files).reverse ++
   libs.reverse ++ flags ++
-  [ "-L" ++ tools.leanBinDir ++ "/lib/lean" ]
+  [ "-L" ++ tools.leanHome ++ "/lib/lean" ]
 
 def compileCommands
   (conf : Project) (tools : Tools)
   (libs flags : List String) :=
 match conf.build with
 | BuildType.executable =>
-  List.join (sourceCommands tools <$> conf.files) ++
+  List.join (List.map (sourceCommands tools) conf.files) ++
   [ sourceCompile conf.getBinary tools conf.files libs flags ]
 | BuildType.library =>
-  List.join (sourceCommands tools <$> conf.files) ++
+  List.join (List.map (sourceCommands tools) conf.files) ++
   [ sourceLink conf.getBinary tools conf.files flags ]
 
 def oleanCommands (conf : Project) (tools : Tools) :=
 List.join (List.filterMap (sourceOlean tools) conf.files)
 
 def procents {α : Type} (xs : List α) : List (Nat × α) :=
-(λ (p : Nat × α) => (p.1 * 100 / xs.length, p.2)) <$> xs.enum
+List.map (λ (p : Nat × α) => (p.1 * 100 / xs.length, p.2)) xs.enum
 
 def compileProject (conf : Project) (tools : Tools) (libs : List String) : IO Unit :=
 let runPretty :=
 λ (p : Nat × String) => runCmdPretty ("(" ++ toString p.1 ++ " %)") p.2;
-let actions := runPretty <$>
-  procents (compileCommands conf tools libs conf.cppFlags);
+let actions := List.map runPretty
+  (procents $ compileCommands conf tools libs conf.cppFlags);
 IO.println ("Compiling " ++ conf.name) >> forM' id actions
 
 def silentRemove (filename : String) : IO Unit :=
@@ -112,7 +112,7 @@ partial def resolveDepsAux (depsDir : String) (download : Bool) :
     IO.cond (exitv ≠ 0) $ throw (IO.Error.userError err));
 
   conf ← readConf confPath;
-  projects ← sequence (resolveDepsAux dep.name <$> conf.deps);
+  projects ← sequence (List.map (resolveDepsAux dep.name) conf.deps);
   pure (List.join projects ++ [ (dep.name, conf) ])
 
 def resolveDeps (conf : Project) (download : Bool := false) : IO Deps :=
@@ -130,7 +130,7 @@ def getDepBinaryPath (depsDir : String) (conf : Path × Project) : String :=
 [ ".", depsDir, conf.fst, conf.snd.getBinary ].joinPath
 
 def getCppLibraries (conf : Path × Project) : List String :=
-String.append "-l" <$> conf.snd.cppLibs
+List.map (String.append "-l") conf.snd.cppLibs
 
 def evalDep {α : Type} (depsDir : String) (rel : Path)
   (action : IO α) : IO α := do
@@ -170,8 +170,8 @@ def build (tools : Tools) (conf : Project) : IO Unit := do
   buildAux tools conf.depsDir ref false deps;
   let libs :=
     Lean.deps ++
-    List.join (getCppLibraries <$> deps) ++
-    getDepBinaryPath conf.depsDir <$> deps;
+    List.join (List.map getCppLibraries deps) ++
+    List.map (getDepBinaryPath conf.depsDir) deps;
   compileProject conf tools libs
 
 def olean (tools : Tools) (conf : Project) : IO Unit := do
@@ -189,7 +189,7 @@ def recOlean (tools : Tools) (conf : Project) : IO Unit := do
 def clean (conf : Project) : IO Unit := do
   conf ← readConf config;
   let buildFiles :=
-  conf.getBinary :: List.join (Source.garbage <$> conf.files);
+  conf.getBinary :: List.join (List.map Source.garbage conf.files);
   forM' silentRemove buildFiles  
 
 def cleanRec (conf : Project) : IO Unit := do
