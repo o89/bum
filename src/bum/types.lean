@@ -90,7 +90,7 @@ structure Dep :=
 def Dep.cmd (depsDir : String) (x : Dep) : String :=
 Repo.cmd (depsDir ++ "/" ++ x.name) x.source
 
-instance : HasToString Dep :=
+instance : ToString Dep :=
 ⟨λ s => match s with
 | ⟨name, Repo.none⟩    => name
 | ⟨name, Repo.github url⟩ => name ++ " github \"" ++ url ++ "\""

@@ -1,51 +1,49 @@
-import Init.System.IO
-import Init.System.FilePath
 import bum.io
 
 def getTools (conf : Project) : IO Tools := do
-  leanHomeOpt ← IO.getEnv "LEAN_HOME";
+  let leanHomeOpt ← IO.getEnv "LEAN_HOME";
 
   match leanHomeOpt with
   | some leanHome => do
-    _ ← IO.setEnv "LEAN_PATH" "";
+    let _ ← IO.setEnv "LEAN_PATH" "";
     addToLeanPath [ leanHome, "lib", "lean" ].joinPath;
-    src ← IO.realPath [ ".", "src" ].joinPath;
+    let src ← IO.realPath [ ".", "src" ].joinPath;
     addToLeanPath src;
-    _ ← IO.runCmd ("mkdir -p " ++ conf.depsDir);
+    let _ ← IO.runCmd ("mkdir -p " ++ conf.depsDir);
     pure ⟨leanHome, [ leanHome, "bin", "lean" ].joinPath, "ar", "c++"⟩
   | _ => throw (IO.Error.userError "Environment variable LEAN_HOME not found")
 
 def eval : Command → IO Unit
 | Command.start => do
-  conf ← readConf config;
+  let conf ← readConf config;
   match conf.build with
   | BuildType.executable => do
     let name := conf.getBinary;
     IO.println ("Starting: " ++ name);
-    _ ← IO.runCmd [".", name].joinPath;
+    let _ ← IO.runCmd [".", name].joinPath;
     pure ()
   | BuildType.library =>
     IO.println "Cannot start a library"
 | Command.clean scale => do
-  conf ← readConf config;
+  let conf ← readConf config;
   (match scale with
   | Scale.this => clean
   | Scale.all  => cleanRec) conf
 | Command.compile => do
-  conf ← readConf config;
-  tools ← getTools conf;
+  let conf ← readConf config;
+  let tools ← getTools conf;
   build tools conf
 | Command.olean scale => do
-  conf ← readConf config;
-  tools ← getTools conf;
+  let conf ← readConf config;
+  let tools ← getTools conf;
   match scale with
   | Scale.this => do
-    _ ← setLeanPath conf;
+    let _ ← setLeanPath conf;
     olean tools conf
   | Scale.all => recOlean tools conf
 | Command.deps => do
-  conf ← readConf config;
-  deps ← resolveDeps conf true;
+  let conf ← readConf config;
+  let deps ← resolveDeps conf true;
   let toPrint :=
   List.map (String.append "==> dependency: " ∘
             Project.name ∘ Prod.snd) deps;

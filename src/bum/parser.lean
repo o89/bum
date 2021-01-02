@@ -1,179 +1,103 @@
-import Init.System.IO
-import Lean.Parser
-import bum.types
-import bum.auxiliary
-open Lean Lean.Parser
+inductive ParseResult (α : Type)
+| done (pos : Nat) (result : α) : ParseResult α
+| fail (pos : Nat) (msg : List String) : ParseResult α
 
-abbrev CanFail := Except String
+def Parser (α : Type) :=
+∀ (input : String) (start : Nat), ParseResult α
 
-def Option.err {ε α : Type} (x : ε) : Option α → Except ε α
-| some v => Except.ok v
-| none   => Except.error x
+def Parser.bind {α β : Type} (p : Parser α) (f : α → Parser β) : Parser β :=
+λ input pos => match p input pos with
+| ParseResult.done pos a => f a input pos
+| ParseResult.fail pos msg => ParseResult.fail pos msg
 
-def CanFail.guard (cond : Bool) (err : String) :=
-if ¬cond then Except.error err else Except.ok ()
+def Parser.pure {α : Type} (a : α) : Parser α :=
+λ input pos => ParseResult.done pos a
 
-protected def getNode (name : Name) : Syntax → Option Syntax
-| node@(Syntax.node kind _) =>
-  if name == kind then some node else none
-| _ => none
+def Parser.fail {α : Type} (msg : String) : Parser α :=
+λ _ pos => ParseResult.fail pos [ msg ]
 
-protected def getArg (s : Syntax) (name : Name) : Option Syntax :=
-s.getArgs.findSome? (getNode name)
+instance : Monad Parser :=
+{ pure := Parser.pure, bind := Parser.bind }
 
-protected def isDeclValSimple (id : Name) : Syntax → Option Syntax
-| Syntax.node `Lean.Parser.Command.declaration args => do
-  definition ← args.findSome? (getNode `Lean.Parser.Command.def);
+def Parser.failure {α : Type} : Parser α :=
+λ _ pos => ParseResult.fail pos []
 
-  id' ← getArg definition `Lean.Parser.Command.declId;
-  guard (id'.getIdAt 0 == id);
+def Parser.orElse {α : Type} (p q : Parser α) : Parser α :=
+λ input pos => match p input pos with
+| ParseResult.fail pos₁ msg₁ =>
+  if pos₁ ≠ pos then ParseResult.fail pos₁ msg₁
+  else match q input pos with
+  | ParseResult.fail pos₂ msg₂ =>
+    if pos₁ < pos₂ then ParseResult.fail pos₁ msg₁
+    else if pos₂ < pos₁ then ParseResult.fail pos₂ msg₂
+    else ParseResult.fail pos₁ (msg₁ ++ msg₂)
+  | ok => ok
+| ok => ok
 
-  decl ← getArg definition `Lean.Parser.Command.declValSimple;
-  pure decl
-| _ => none
+instance : Alternative Parser :=
+{ failure := Parser.failure, orElse := Parser.orElse }
 
-protected def getDeclValSimple (id : Name) (s : Syntax) :=
-s.getArgs.findSome? (isDeclValSimple id)
+def decorateErrors {α : Type} (msgs : List String) (p : Parser α) : Parser α :=
+λ input pos => match p input pos with
+| ParseResult.fail _ _ => ParseResult.fail pos msgs
+| ok => ok
 
-protected def getStrLit (s : Syntax) : Option String :=
-getArg s `strLit >>= Syntax.isStrLit?
+def decorateError {α : Type} (msg : String) : Parser α → Parser α :=
+decorateErrors [ msg ]
 
-protected def getString (id : Name) (s : Syntax) : CanFail String :=
-match getDeclValSimple id s with
-| some decl => (getStrLit decl).err ("“" ++ toString id ++ "” is not a string")
-| none => Except.error ("“" ++ toString id ++ "” not found")
+def foldrCore {α β : Type} (f : α → β → β) (p : Parser α) (b : β) : Nat → Parser β
+| 0 => failure
+| reps + 1 => (p >>= λ x => foldrCore f p b reps >>= λ xs => pure (f x xs)) <|> pure b
 
-protected def getApplicationName := getString `app
-protected def getDepsDir := getString `depsDir
+def foldr {α β : Type} (f : α → β → β) (p : Parser α) (b : β) : Parser β :=
+λ input pos => foldrCore f p b (input.length - pos + 1) input pos
 
-protected def checkAtomValue (s : String) : Syntax → Bool
-| Syntax.atom _ s' => s = s'
-| _ => false
+def eps : Parser Unit := pure ()
 
-protected def isNotComma : Syntax → Bool
-| Syntax.atom _ "," => false
-| _ => true
+def many {α : Type} (p : Parser α) : Parser (List α) :=
+foldr List.cons p []
 
-protected def isValidFileList (s : Syntax) :=
-(Syntax.isStrLit? s).isSome ||
-checkAtomValue "," s
+def many1 {α : Type} (p : Parser α) : Parser (List α) :=
+List.cons <$> p <*> many p
 
-protected def getExt (filename : String) : String × String :=
-let byDot := filename.split (λ x => x == '.');
-if byDot.length > 1 then
-  (String.join byDot.init, byDot.getLast!)
-else (filename, "")
+def str (p : Parser Char) : Parser String :=
+String.mk <$> many p
 
-protected def getSource (filename : String) : CanFail Source :=
-match getExt filename with
-| (path, "lean") => Except.ok (Source.lean [".", "src", path].joinPath)
-| (path, "cpp")  => Except.ok (Source.cpp [".", "src", path].joinPath)
-| _              =>
-  Except.error ("“" ++ filename ++ "” is not Lean or C++ source")
+def sepBy1 {α : Type} (sep : Parser Unit) (p : Parser α) : Parser (List α) :=
+List.cons <$> p <*> many (do sep; p)
 
-protected def getStringList {α : Type} (id : Name)
-  (f : String → CanFail α) (s : Syntax) : CanFail (List α) :=
-let getStrLitExcept :=
-λ s => (Syntax.isStrLit? s).err "expected string";
-match getDeclValSimple id s with
-| some decl => do
-  val ← (getArg decl `Lean.Parser.Term.listLit).err
-    ("“" ++ toString id ++ "” must be a list");
+def sepBy {α : Type} (sep : Parser Unit) (p : Parser α) : Parser (List α) :=
+sepBy1 sep p <|> pure []
 
-  CanFail.guard (val.getNumArgs = 3) "invalid list";
-  CanFail.guard (checkAtomValue "[" $ val.getArg 0) "invalid list";
-  CanFail.guard (checkAtomValue "]" $ val.getArg 2) "invalid list";
+def fixAux {α : Type} (F : Parser α → Parser α) : Nat → Parser α
+| 0 => failure
+| maxDepth + 1 => F (fixAux F maxDepth)
 
-  let lst := (val.getArg 1).getArgs.toList;
-  CanFail.guard (lst.all isValidFileList)
-    ("“" ++ toString id ++ "” must be a list of string");
-  (lst.filter isNotComma).mapM (getStrLitExcept >=> f)
-| none => pure []
+def Parser.fix {α : Type} (F : Parser α → Parser α) : Parser α :=
+λ input pos => fixAux F (input.length - pos + 1) input pos
 
-protected def getFiles := getStringList `files getSource
-protected def getCppLibs := getStringList `cppLibs pure
-protected def getCppFlags := getStringList `cppFlags pure
+def sat (p : Char → Bool) : Parser Char :=
+λ input pos =>
+  if pos < input.length then
+    let c := input.get pos;
+    if p c then ParseResult.done (pos + 1) c
+    else ParseResult.fail pos []
+  else ParseResult.fail pos []
 
-protected def getBuildType (s : Syntax) : CanFail BuildType :=
-match getDeclValSimple `build s with
-| some decl => do
-  val ← (decl.getArgs.find? Syntax.isIdent).err
-    "build type must be an atom";
-  match val.getId with
-  | `exec => pure BuildType.executable
-  | `lib => pure BuildType.library
-  | x => throw ("“" ++ toString x ++ "” is unknown build type")
-| _ => pure BuildType.executable
+def ch (c : Char) : Parser Unit :=
+decorateError (String.singleton c) (sat (λ x => c == x) >>= λ _ => eps)
 
-protected def getRepo : Syntax → CanFail Repo
-| Syntax.node `Lean.Parser.Term.anonymousCtor args => do
-  CanFail.guard (args.size = 3) "invalid repository tuple";
-  CanFail.guard (checkAtomValue "⟨" $ args.get! 0) "invalid repository tuple";
-  CanFail.guard (checkAtomValue "⟩" $ args.get! 2) "invalid repository tuple";
+def remaining : Parser Nat :=
+λ input pos => ParseResult.done pos (input.length - pos)
 
-  let val := args.get! 1;
+def eof : Parser Unit :=
+decorateError "<end-of-file>" $
+do let rem ← remaining; guard (rem = 0)
 
-  let repoVar := (val.getArg 0).getId;
-  CanFail.guard (checkAtomValue "," $ val.getArg 1) "invalid repository tuple";
-  url ← (Syntax.isStrLit? $ val.getArg 2).err "URI must be a string";
-
-  match repoVar with
-  | `git    => pure (Repo.git url)
-  | `github => pure (Repo.github url)
-  | repo => throw ("“" ++ toString repo ++ "” is unknown repository type")
-| _ => throw "repository description must be a tuple"
-
-protected def getDep : Syntax → CanFail Dep
-| Syntax.node `Lean.Parser.Term.anonymousCtor args => do
-  CanFail.guard (args.size = 3) "invalid package tuple";
-  CanFail.guard (checkAtomValue "⟨" $ args.get! 0) "invalid package tuple";
-  CanFail.guard (checkAtomValue "⟩" $ args.get! 2) "invalid package tuple";
-
-  let val := args.get! 1;
-
-  let pkgName := (val.getArg 0).getId;
-  CanFail.guard (pkgName != Name.anonymous)
-    "invalid package name";
-  CanFail.guard (checkAtomValue "," $ val.getArg 1)
-    "invalid package tuple";
-  repo ← getRepo (val.getArg 2);
-  pure ⟨toString pkgName, repo⟩
-| _ => throw "package description must be a tuple"
-
-protected def getDeps (s : Syntax) : CanFail (List Dep) := do
-match getDeclValSimple `deps s with
-| some decl => do
-  val ← (getArg decl `Lean.Parser.Term.listLit).err
-    "dependency list must be a list";
-
-  CanFail.guard (val.getNumArgs = 3)
-    "invalid dependency list";
-  CanFail.guard (checkAtomValue "[" $ val.getArg 0)
-    "invalid dependency list";
-  CanFail.guard (checkAtomValue "]" $ val.getArg 2)
-    "invalid dependency list";
-
-  let lst := (val.getArg 1).getArgs.toList.filter isNotComma;
-  lst.mapM getDep
-| none => pure []
-
-def readConf (filename : String) : IO Project := do
-  env ← mkEmptyEnvironment;
-  s ← parseFile env filename;
-  match s with
-  | node@(Syntax.node `Lean.Parser.Module.module _) => do  
-    -- TODO: why 1?
-    let decls := node.getArgs.get! 1;
-
-    name ← IO.ofExcept (getApplicationName decls);
-    depsDir ← IO.ofExcept (getDepsDir decls);
-
-    buildType ← IO.ofExcept (getBuildType decls);
-    deps ← IO.ofExcept (getDeps decls);
-
-    files ← IO.ofExcept (getFiles decls);
-    cppLibs ← IO.ofExcept (getCppLibs decls);
-    cppFlags ← IO.ofExcept (getCppFlags decls);
-
-    pure ⟨buildType, name, files, deps, depsDir, cppLibs, cppFlags⟩
-  | _ => throw (IO.Error.userError "something went wrong")
+def Parser.run {α : Type} (p : Parser α) (input : String) : Except String α :=
+match (p <* eof) input 0 with
+| ParseResult.done pos res => Except.ok res
+| ParseResult.fail pos msg =>
+  Except.error ("expected “" ++ String.intercalate "or " msg ++
+                "” at " ++ toString pos ++
+                " in:\n" ++ input.extract (pos - 10) (pos + 10) ++ "...")

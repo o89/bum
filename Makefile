@@ -3,13 +3,13 @@ LEAN_PATH = $(LEAN_HOME)/lib/lean/:$(shell realpath src)
 export LEAN_PATH
 
 CPP = src/bum/bindings
-LEAN = src/bum/auxiliary src/bum/types src/bum/parser src/bum/io src/bum/bum
+LEAN = src/bum/auxiliary src/bum/parser src/bum/types src/bum/configparser src/bum/configconverter src/bum/io src/bum/bum
 
 OBJS = $(shell for path in $(addsuffix .o, $(CPP) $(LEAN)); do echo $$path; done | tac)
 
 CXX = c++
-CFLAGS = -g -Wall -D LEAN_MULTI_THREAD -Wno-unused-command-line-argument -pthread -fPIC
-LIBS = -lleancpp -lInit -lStd -lLean -lleancpp -lInit -lStd -lLean -lgmp -ldl
+CFLAGS = -g -Wall -D LEAN_MULTI_THREAD -Wno-unused-command-line-argument -pthread
+LIBS = -no-pie -Wl,--start-group -lleancpp -lInit -lStd -lLean -Wl,--end-group -lgmp -ldl
 
 RES = bum
 
@@ -27,4 +27,5 @@ $(addsuffix .olean,$(LEAN)): %.olean: %.lean
 
 clean:
 	rm -f $(addsuffix .cpp,$(LEAN)) $(addsuffix .olean,$(LEAN))
+	rm -f $(addsuffix .o,$(LEAN)) $(addsuffix .o,$(CPP))
 	rm -f $(RES)

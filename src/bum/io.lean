@@ -1,20 +1,17 @@
 import Init.System.IO
 import Init.System.FilePath
-import bum.parser
+import bum.configconverter
 
--- bin/leanc:
--- NOT: libleancpp and libInit are cyclically dependent
-def Lean.deps := [ "-lpthread", "-ldl", "-lgmp", "-lStd",
-                   "-lLean", "-lStd", "-lInit", "-lleancpp",
-                   "-lLean", "-lStd", "-lInit", "-lleancpp" ]
+def Lean.deps := [ "-ldl", "-lgmp", "-Wl,--end-group", "-lLean",
+                   "-lStd", "-lInit", "-lleancpp", "-Wl,--start-group" ]
 
-def Lean.cppOptions := [ "-fPIC", "-Wno-unused-command-line-argument" ]
+def Lean.cppOptions := [ "-no-pie", "-pthread", "-Wno-unused-command-line-argument" ]
 
 def config := "bum.config"
 
 def runCmdPretty (additionalInfo s : String) : IO Unit := do
   IO.println ("==> " ++ s ++ " " ++ additionalInfo);
-  exitv ← IO.runCmd s;
+  let exitv ← IO.runCmd s;
   let errorStr := "process exited with code " ++ toString exitv;
   IO.cond (exitv ≠ 0) $ throw (IO.Error.userError errorStr)
 
@@ -47,7 +44,7 @@ def sourceCompile (output : String) (tools : Tools)
   (files : List Source) (libs flags : List String) :=
 List.space $
   [ tools.cpp ] ++ Lean.cppOptions ++
-  [ "-o",  output ] ++
+  [ "-o", output ] ++
   (List.map Source.obj files).reverse ++
   libs.reverse ++ flags ++
   [ "-L" ++ tools.leanHome ++ "/lib/lean" ]
@@ -88,8 +85,8 @@ match dest with
 | _  => dest ++ ":" ++ delta
 
 def addToLeanPath (u : String) : IO Unit := do
-  path ← IO.getEnv "LEAN_PATH";
-  _ ← match path with
+  let path ← IO.getEnv "LEAN_PATH";
+  match path with
   | none   => IO.setEnv "LEAN_PATH" u
   | some v => IO.setEnv "LEAN_PATH" (v.addToPath u);
   pure ()
@@ -102,17 +99,17 @@ partial def resolveDepsAux (depsDir : String) (download : Bool) :
 | parent, dep => do
   let confPath := [ depsDir, dep.name, config ].joinPath;
 
-  isThere ← IO.fileExists confPath;
+  let isThere ← IO.fileExists confPath;
   IO.cond (¬isThere ∧ download) (do
     IO.println ("==> downloading " ++ dep.name ++ " (of " ++ parent ++ ")");
-    exitv ← IO.runCmd (Dep.cmd depsDir dep);
+    let exitv ← IO.runCmd (Dep.cmd depsDir dep);
     let err :=
       "downloading of “" ++ dep.name ++
       "” failed with code " ++ toString exitv;
     IO.cond (exitv ≠ 0) $ throw (IO.Error.userError err));
 
-  conf ← readConf confPath;
-  projects ← sequence (List.map (resolveDepsAux dep.name) conf.deps);
+  let conf ← readConf confPath;
+  let projects ← sequence (List.map (resolveDepsAux depsDir download dep.name) conf.deps);
   pure (List.join projects ++ [ (dep.name, conf) ])
 
 def resolveDeps (conf : Project) (download : Bool := false) : IO Deps :=
@@ -134,12 +131,13 @@ List.map (String.append "-l") conf.snd.cppLibs
 
 def evalDep {α : Type} (depsDir : String) (rel : Path)
   (action : IO α) : IO α := do
-  cwd ← IO.realPath ".";
+  let cwd ← IO.realPath ".";
   let path := [ depsDir, rel ].joinPath;
-  exitv ← IO.chdir path;
+  let exitv ← IO.chdir path;
   let errString := "cannot go to " ++ path;
   IO.cond (exitv ≠ 0) $ throw (IO.Error.userError errString);
-  val ← action; _ ← IO.chdir cwd;
+  let val ← action;
+  let _ ← IO.chdir cwd;
   pure val
 
 def buildAux (tools : Tools) (depsDir : String)
@@ -147,26 +145,26 @@ def buildAux (tools : Tools) (depsDir : String)
   Bool → Deps → IO Unit
 | _, [] => pure ()
 | needsRebuild', hd :: tl => do
-  done ← doneRef.get;
+  let done ← doneRef.get;
   if done.notElem hd.snd.name then do
-    needsRebuild ← evalDep depsDir hd.fst (do
-      needsRebuild ← or needsRebuild' <$> not <$> IO.fileExists hd.snd.getBinary;
+    let needsRebuild ← evalDep depsDir hd.fst (do
+      let needsRebuild ← or needsRebuild' <$> not <$> IO.fileExists hd.snd.getBinary;
       IO.cond needsRebuild (compileProject hd.snd tools []);
       pure needsRebuild);
 
     doneRef.set (hd.snd.name :: done);
-    buildAux needsRebuild tl
-  else buildAux needsRebuild' tl
+    buildAux tools depsDir doneRef needsRebuild tl
+  else buildAux tools depsDir doneRef needsRebuild' tl
 
 def setLeanPath (conf : Project) : IO Deps := do
-  deps ← resolveDeps conf;
-  leanPath ← getLeanPathFromDeps conf.depsDir deps;
+  let deps ← resolveDeps conf;
+  let leanPath ← getLeanPathFromDeps conf.depsDir deps;
   List.forM addToLeanPath leanPath;
   pure deps
 
 def build (tools : Tools) (conf : Project) : IO Unit := do
-  deps ← setLeanPath conf;
-  ref ← IO.mkRef [];
+  let deps ← setLeanPath conf;
+  let ref ← IO.mkRef [];
   buildAux tools conf.depsDir ref false deps;
   let libs :=
     Lean.deps ++
@@ -179,7 +177,7 @@ def olean (tools : Tools) (conf : Project) : IO Unit := do
   List.forM (runCmdPretty "") (oleanCommands conf tools)
 
 def recOlean (tools : Tools) (conf : Project) : IO Unit := do
-  deps ← setLeanPath conf;
+  let deps ← setLeanPath conf;
   List.forM
     (λ (cur : Path × Project) =>
       evalDep conf.depsDir cur.fst (olean tools cur.snd))
@@ -187,13 +185,13 @@ def recOlean (tools : Tools) (conf : Project) : IO Unit := do
   olean tools conf
 
 def clean (conf : Project) : IO Unit := do
-  conf ← readConf config;
+  let conf ← readConf config;
   let buildFiles :=
   conf.getBinary :: List.join (List.map Source.garbage conf.files);
   forM' silentRemove buildFiles  
 
 def cleanRec (conf : Project) : IO Unit := do
-  deps ← resolveDeps conf;
+  let deps ← resolveDeps conf;
   List.forM
     (λ (cur : Path × Project) =>
       evalDep conf.depsDir cur.fst (clean cur.snd))
