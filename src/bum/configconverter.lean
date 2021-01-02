@@ -35,9 +35,12 @@ def confGetBuildType : List Val → Except String BuildType
 | _ => Except.ok BuildType.executable
 
 def parseRepo : Val → Except String Dep
-| Val.pair (Val.string name, Val.pair (Val.string "git", Val.string url)) =>
-  Except.ok ⟨name, Repo.git url⟩
-| _ => Except.error "unknown repository source"
+| Val.pair (Val.string name, Val.pair (Val.string repo, Val.string url)) =>
+  match repo with
+  | "git" => Except.ok ⟨name, Repo.git url⟩
+  | "github" => Except.ok ⟨name, Repo.github url⟩
+  | _ => Except.error "unknown repository source"
+| _ => Except.error "invalid dependency"
 
 -- ???
 instance : Functor List :=
