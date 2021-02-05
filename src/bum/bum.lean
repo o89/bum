@@ -5,11 +5,11 @@ def getTools (conf : Project) : IO Tools := do
 
   match leanHomeOpt with
   | some leanHome => do
-    let _ ← IO.setEnv "LEAN_PATH" ""
+    discard (IO.setEnv "LEAN_PATH" "")
     addToLeanPath [ leanHome, "lib", "lean" ].joinPath
     let src ← IO.realPath conf.srcDir
     addToLeanPath src
-    let _ ← IO.Process.run { cmd := "mkdir", args := #["-p", conf.depsDir]}
+    discard (IO.Process.run { cmd := "mkdir", args := #["-p", conf.depsDir]})
     pure ⟨leanHome, [ leanHome, "bin", "lean" ].joinPath, "ar", "c++"⟩
   | none => throw (IO.Error.userError "Environment variable LEAN_HOME not found")
 
@@ -36,7 +36,7 @@ def eval : Command → IO Unit
   let tools ← getTools conf
   match scale with
   | Scale.current => do
-    let _ ← setLeanPath conf
+    discard (setLeanPath conf)
     let force ← IO.mkRef force?
     olean force tools conf
   | Scale.total => oleanRecur tools conf force?
@@ -52,8 +52,8 @@ def eval : Command → IO Unit
 | Command.help => IO.println Command.helpString
 | Command.app app => do
   exec (Repo.cmd "." app.toRepo)
-  let _ ← IO.Process.run { cmd := "rm", args := #["-rf", ".git"] }
-  pure ()
+  IO.Process.run { cmd := "rm", args := #["-rf", ".git"] }
+  |> discard
 | Command.gitignore =>
   "“gitignore” can only be called individually: bum gitignore"
   |> IO.userError |> throw

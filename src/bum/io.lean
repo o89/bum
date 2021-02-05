@@ -185,7 +185,7 @@ def evalDep {α : Type} (depsDir : String) (rel : Path)
   }
 
   let val ← action
-  let _ ← IO.chdir cwd
+  discard (IO.chdir cwd)
   pure val
 
 def buildAux (tools : Tools) (depsDir : String) (force : IO.Ref Bool)
