@@ -23,7 +23,7 @@ inductive Command
 | leanPath | gitignore
 
 protected def Command.reserved :=
-[ "compile", "start", "deps", "clean", "olean", "app", "lean-path", "gitignore" ]
+[ "compile", "start", "dep", "clean", "olean", "app", "lean-path", "gitignore" ]
 
 protected def Command.groupAux :
   String × List String → List (String × List String) →
@@ -43,7 +43,7 @@ protected def Command.ofString : String × List String → Except String Command
 | ("lean-path", [])      => Command.leanPath
 | ("gitignore", [])      => Command.gitignore
 | ("start", [])          => Command.start
-| ("deps", [])           => Command.deps
+| ("dep", [])           => Command.deps
 | ("clean", [])          => Command.clean Scale.current
 | ("clean", ["recur"])   => Command.clean Scale.total
 | ("olean", keys)        =>
@@ -74,7 +74,7 @@ def Command.helpString :=
 
       list = [] | command [options] list
 
-   command = app (zero|n2o|nitro)  | deps
+   command = app (zero|n2o|nitro)  | dep
            | olean [recur] [force] | compile [force]
            | clean [recur]         | start"
 

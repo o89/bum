@@ -48,7 +48,7 @@ BUM Lean 4 build tool
 
       list = [] | command [options] list
 
-   command = app (zero|n2o|nitro)  | deps
+   command = app (zero|n2o|nitro)  | dep
            | olean [recur] [force] | compile [force]
            | clean [recur]         | start</figure></code>
         <p>Where: <div><ul>
@@ -108,9 +108,9 @@ OK</code>
         </p>
     </section>
     <section>
-        <h3>DEPS</h3>
+        <h3>DEP</h3>
         <p>Recusively download application dependencies.</p>
-        <figure><code>$ bum deps
+        <figure><code>$ bum dep
 ==> downloading n2o (of sample-n2o)
 Cloning into 'deps/n2o'...
 remote: Enumerating objects: 144, done.
@@ -126,7 +126,9 @@ OK</code>
     <section>
         <h3>COMPILE</h3>
         <p>Recusively compile application dependencies
-          (that have not yet been compiled) and application.</p>
+          (that have not yet been compiled) and application.
+          <b>force</b> option turns off checking of last write time.
+        </p>
     </section>
     <section>
         <h3>START</h3>
@@ -136,13 +138,15 @@ OK</code>
         <h3>CLEAN</h3>
         <p>Remove all <b>.olean</b>, <b>.cpp</b> (if they are generated from <b>.lean</b> files)
            and <b>.o</b> files from current project and all project dependencies
-           if <b>clean</b> was called with the <b>recur</b> option.</p>
+           if <b>clean</b> was called with the <b>recur</b> option.
+        </p>
     </section>
     <section>
         <h3>OLEAN</h3>
         <p>Generate <b>.olean</b> files.
            This is useful when the project is, for example, a mathematical library.
            <b>recur</b> option behaves in the same way as in the <b>clean</b> command.
+           <b>force</b> behaves as in <b>compile</b>.
         </p>
     </section>
 </main><footer>
