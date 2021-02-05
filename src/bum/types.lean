@@ -1,3 +1,4 @@
+import bum.auxiliary
 open IO.Process (SpawnArgs)
 
 inductive Application
@@ -41,16 +42,16 @@ protected def Command.groupAux :
 protected def Command.group := Command.groupAux ("", []) []
 
 protected def Command.ofString : String × List String → Except String Command
-| ("compile", [])        => pure Command.compile
-| ("start", [])          => pure Command.start
-| ("deps", [])           => pure Command.deps
-| ("clean", [])          => pure (Command.clean Scale.this)
+| ("compile", [])        => Command.compile
+| ("start", [])          => Command.start
+| ("deps", [])           => Command.deps
+| ("clean", [])          => Command.clean Scale.this
 | ("clean", [ "recur" ]) => Command.clean Scale.all
-| ("olean", [])          => pure (Command.olean Scale.this)
+| ("olean", [])          => Command.olean Scale.this
 | ("olean", [ "recur" ]) => Command.olean Scale.all
 | ("app", [ template ])  => Command.app <$> Application.ofString template
-| ("", _)                => pure Command.nope
-| (cmd, _)               => throw ("unknown or malformed command “" ++ cmd ++"”")
+| ("", _)                => Command.nope
+| (cmd, xs)              => throw s!"unknown or malformed command “{cmd} {xs.space}”"
 
 protected def Command.ofList : List String → Except String (List Command) :=
 List.mapM Command.ofString ∘ Command.group

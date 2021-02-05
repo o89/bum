@@ -84,7 +84,7 @@ def compileProject (conf : Project) (tools : Tools) (libs : List String) : IO Un
 let runPretty := λ p => runCmdPretty p.2 (some s!"({p.1} %)");
 let actions := List.map runPretty
   (procents $ compileCommands conf tools libs conf.cppFlags);
-IO.println ("Compiling " ++ conf.name) >> forM' id actions
+IO.println ("Compiling " ++ conf.name) >> List.forM id actions
 
 def silentRemove (filename : String) : IO Unit :=
 IO.remove filename >>= λ _ => pure ()
@@ -113,9 +113,10 @@ partial def resolveDepsAux (depsDir : String) (download : Bool) :
   let confPath := [ depsDir, dep.name, config ].joinPath;
 
   let isThere ← IO.fileExists confPath;
-  IO.cond (¬isThere ∧ download) (do
-    IO.println ("==> downloading " ++ dep.name ++ " (of " ++ parent ++ ")")
-    runCmdPretty (Dep.cmd depsDir dep))
+  if (¬isThere ∧ download) then {
+    IO.println ("==> downloading " ++ dep.name ++ " (of " ++ parent ++ ")");
+    runCmdPretty (Dep.cmd depsDir dep)
+  }
 
   let conf ← readConf confPath;
   let projects ← sequence (List.map (resolveDepsAux depsDir download dep.name) conf.deps);
@@ -142,9 +143,12 @@ def evalDep {α : Type} (depsDir : String) (rel : Path)
   (action : IO α) : IO α := do
   let cwd ← IO.realPath ".";
   let path := [ depsDir, rel ].joinPath;
+
   let exitv ← IO.chdir path;
-  let errString := "cannot go to " ++ path;
-  IO.cond (exitv ≠ 0) $ throw (IO.Error.userError errString);
+  unless (exitv = 0) do {
+    throw (IO.Error.userError s!"cannot chdir to {path}")
+  }
+
   let val ← action;
   let _ ← IO.chdir cwd;
   pure val
@@ -158,7 +162,7 @@ def buildAux (tools : Tools) (depsDir : String)
   if done.notElem hd.snd.name then do
     let needsRebuild ← evalDep depsDir hd.fst (do
       let needsRebuild ← or needsRebuild' <$> not <$> IO.fileExists hd.snd.getBinary;
-      IO.cond needsRebuild (compileProject hd.snd tools []);
+      if needsRebuild then { compileProject hd.snd tools [] }
       pure needsRebuild);
 
     doneRef.set (hd.snd.name :: done);
@@ -197,7 +201,7 @@ def clean (conf : Project) : IO Unit := do
   let conf ← readConf config;
   let buildFiles :=
   conf.getBinary :: List.join (List.map Source.garbage conf.files);
-  forM' silentRemove buildFiles  
+  List.forM silentRemove buildFiles  
 
 def cleanRec (conf : Project) : IO Unit := do
   let deps ← resolveDeps conf;

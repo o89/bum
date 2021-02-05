@@ -24,13 +24,6 @@ instance Monad.HAndThen {α β : Type} {m : Type → Type}
   [Monad m] : HAndThen (m α) (m β) (m β) :=
 ⟨λ a b => a >>= λ _ => b⟩
 
-def forM' {α β : Type} [Inhabited β] {m : Type → Type} [Monad m]
-  (f : α → m β) : List α → m β :=
-List.foldr (HAndThen.hAndThen ∘ f) (pure arbitrary)
-
-def IO.cond (b : Bool) (action : IO Unit) : IO Unit :=
-if b then action else pure ()
-
 def uniqAux {α β : Type} [BEq β] (f : α → β) : List α → List α → List α
 | buff, [] => buff
 | buff, hd :: tl =>
