@@ -65,33 +65,36 @@ def confGetDeps : List Val → Except String (List Dep)
   | _ => confGetDeps tl
 | _ => Except.ok []
 
-def getSource : Val → Except String Source
+def getSource (dir : String) : Val → Except String Source
 | Val.string filename =>
   match getExt filename with
-  | (path, "lean") => Except.ok (Source.lean [".", "src", path].joinPath)
-  | (path, "cpp")  => Except.ok (Source.cpp [".", "src", path].joinPath)
+  | (path, "lean") => Except.ok (Source.lean [dir, path].joinPath)
+  | (path, "cpp")  => Except.ok (Source.cpp [dir, path].joinPath)
   | _              => Except.error $ "“" ++ filename ++ "” is not Lean or C++ source"
 | _ => Except.error "filename must be a string"
 
-def confGetFiles : List Val → Except String (List Source)
+def confGetFiles (dir : String) : List Val → Except String (List Source)
 | hd :: tl =>
   match hd with
   | Val.pair (Val.string "files", Val.list lst) =>
-    match sequence (getSource <$> lst) with
+    match sequence (getSource dir <$> lst) with
     | Except.ok val    => Except.ok val
     | Except.error err => Except.error err
-  | _ => confGetFiles tl
+  | _ => confGetFiles dir tl
 | _ => Except.error "sources list not found"
 
 def confToProject (xs : List Val) : Except String Project := do
+  let srcDir ← confGetString "src-dir" (some "src") xs;
+  let depsDir ← confGetString "deps-dir" (some "deps") xs;
+
   let name ← confGetString "app" none xs;
   let buildType ← confGetBuildType xs;
+
   let deps ← confGetDeps xs;
-  let files ← confGetFiles xs;
-  let depsDir ← confGetString "deps-dir" (some "deps") xs;
+  let files ← confGetFiles srcDir xs;
   let cppLibs ← getStringList "cpp-libs" xs;
   let cppFlags ← getStringList "cpp-flags" xs;
-  pure ⟨buildType, name, files, deps, depsDir, cppLibs, cppFlags⟩
+  pure ⟨buildType, name, files, deps, depsDir, srcDir, cppLibs, cppFlags⟩
 
 def readConf (filename : String) : IO Project := do
   let contents ← IO.FS.readFile filename;

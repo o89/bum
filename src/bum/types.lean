@@ -61,7 +61,7 @@ def Command.parse : List String → Except String (List Command)
 | [] => pure []
 | lst@(hd :: _) =>
   if Command.reserved.elem hd then Command.ofList lst
-  else throw "in the first place should be a command"
+  else throw s!"“{hd}” is not a registered command"
 
 def Command.helpString :=
 "BUM Lean 4 build tool
@@ -131,6 +131,7 @@ structure Project :=
 (files    : List Source)
 (deps     : List Dep)
 (depsDir  : String)
+(srcDir   : String)
 (cppLibs  : List String)
 (cppFlags : List String)
 

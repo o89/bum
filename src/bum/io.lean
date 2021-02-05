@@ -10,10 +10,6 @@ structure Action extends SpawnArgs :=
 
 def exec (proc : SpawnArgs) (s : Option String := none) : IO Unit := do
   let info := s.getD ""
-
-  match proc.cwd with
-  | some cwd => println! ">>> {cwd}"
-  | none => pure ()
   println! "==> {proc.cmd} {proc.args.toList.space} {info}"
 
   let child ← spawn proc
@@ -41,7 +37,7 @@ def sourceOlean (tools : Tools) : Source → List Action
 def getInclude (tools : Tools) : Array String :=
 #["-I" ++ [ tools.leanHome, "include" ].joinPath]
 
-def sourceCommands (tools : Tools) : Source → List Action
+def sourceCommands (tools : Tools) (dir : String) : Source → List Action
 | src@(Source.lean path) =>
   [ -- generate olean
     { cmd  := tools.lean, args := #["-o", src.asOlean, src.path],
@@ -49,7 +45,7 @@ def sourceCommands (tools : Tools) : Source → List Action
     -- compile into .cpp
     { cmd  := tools.lean, file := src,
       args := #["-c", ["..", src.asCpp].joinPath, ["..", src.path].joinPath]
-      cwd  := [".", "src"].joinPath },
+      cwd  := dir },
     -- emit .o
     { cmd  := tools.cpp, file := src,
       args := getInclude tools ++ #["-c", src.asCpp, "-o", src.obj] } ]
@@ -86,7 +82,7 @@ def rebuild? (v : Source) : IO Bool := do
 
 def compileCommands (conf : Project) (tools : Tools)
   (libs flags : List String) : List Action :=
-List.join (List.map (sourceCommands tools) conf.files) ++
+List.join (List.map (sourceCommands tools conf.srcDir) conf.files) ++
 match conf.build with
 | BuildType.executable =>
   sourceCompile conf.getBinary tools conf.files libs flags
@@ -170,11 +166,9 @@ List.uniq (Project.name ∘ Prod.snd) <$> List.join <$>
   List.mapM (resolveDepsAux conf.depsDir download conf.name) conf.deps
 
 def getLeanPathFromDeps (depsDir : String) (xs : Deps) : IO (List String) :=
-let getSourcesDir : Path → String :=
-λ path => [ ".", depsDir, path, "src" ].joinPath;
-let getPkg : Path × Project → IO String :=
-λ ⟨path, conf⟩ => IO.realPath (getSourcesDir path);
-List.mapM getPkg xs
+let getSourcesDir : Path × Project → String :=
+λ (path, conf) => [ ".", depsDir, path, conf.srcDir ].joinPath
+List.mapM (IO.realPath ∘ getSourcesDir) xs
 
 def getDepBinaryPath (depsDir : String) (conf : Path × Project) : String :=
 [ ".", depsDir, conf.fst, conf.snd.getBinary ].joinPath

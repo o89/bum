@@ -59,7 +59,7 @@ BUM Lean 4 build tool
            In the configuration file should be following keys:
            <b>app</b>, <b>build</b>, <b>files</b>.
            Also there can be following optional definitions:
-           <b>deps</b>, <b>deps-dir</b> and <b>cpp-libs</b>.
+           <b>deps</b>, <b>src-dir</b>, <b>deps-dir</b> and <b>cpp-libs</b>.
             This is configuration file for
            <a href="https://github.com/o89/sample-nitro">NITRO sample</a>
            application:</p>
@@ -76,6 +76,7 @@ BUM Lean 4 build tool
                (which can be used as a dependency).</li>
             <li><b>deps-dir</b> is the place where BUM stores dependencies
                 for the current application.</li>
+            <li><b>src-dir</b> is the path to be added to sources (<b>files</b> parameter).</li>
             <li><b>files</b> is a list of source files.
                 Each source can be <b>.cpp</b> or <b>.lean</b> file.</li>
             <li><b>deps</b> is the list of tuples: ⟨name, ⟨source, url⟩⟩.
