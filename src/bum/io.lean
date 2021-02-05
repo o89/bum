@@ -42,18 +42,15 @@ def IO.getLastWriteTime! (path : String) : IO UInt64 := do
     IO.getLastWriteTime path
   else pure 0
 
-def rebuild? (v : Source) : IO Bool := do
+def Source.newer? (v : Source) (path : String) : IO Bool := do
   let mtime₁ ← IO.getLastWriteTime! v.path
-  let mtime₂ ← IO.getLastWriteTime!
-    (match v with
-    | Source.lean val => v.asOlean
-    | Source.cpp val  => v.obj)
+  let mtime₂ ← IO.getLastWriteTime! path
   pure (mtime₁ > mtime₂)
 
 def sourceOlean (tools : Tools) : Source → List Action
 | src@(Source.lean path) =>
   [ { cmd := tools.lean, args := #["-o", src.asOlean, src.path],
-      skip := src.skip, old? := rebuild? src } ]
+      skip := src.skip, old? := src.newer? src.asOlean } ]
 | _ => []
 
 def getInclude (tools : Tools) : Array String :=
@@ -63,16 +60,16 @@ def sourceCommands (tools : Tools) (dir : String) : Source → List Action
 | src@(Source.lean path) =>
   [ -- generate olean
     { cmd  := tools.lean, args := #["-o", src.asOlean, src.path],
-      skip := src.skip, old? := rebuild? src },
+      skip := src.skip, old? := src.newer? src.asOlean },
     -- compile into .cpp
-    { cmd  := tools.lean, old? := rebuild? src,
+    { cmd  := tools.lean, old? := src.newer? src.asCpp,
       args := #["-c", ["..", src.asCpp].joinPath, ["..", src.path].joinPath]
       cwd  := dir },
     -- emit .o
-    { cmd  := tools.cpp, old? := rebuild? src,
+    { cmd  := tools.cpp, old? := src.newer? src.obj,
       args := getInclude tools ++ #["-c", src.asCpp, "-o", src.obj] } ]
 | src@(Source.cpp path) =>
-  [{ cmd := tools.cpp, old? := rebuild? src, skip := src.skip,
+  [{ cmd := tools.cpp, old? := src.newer? src.obj, skip := src.skip,
      args := getInclude tools ++ #["-c", src.path, "-o", src.obj] } ]
 
 def sourceLink (output : String) (tools : Tools)
