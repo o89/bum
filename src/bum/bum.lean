@@ -9,7 +9,7 @@ def getTools (conf : Project) : IO Tools := do
     addToLeanPath [ leanHome, "lib", "lean" ].joinPath;
     let src ← IO.realPath [ ".", "src" ].joinPath;
     addToLeanPath src;
-    let _ ← IO.runCmd ("mkdir -p " ++ conf.depsDir);
+    let _ ← IO.Process.run { cmd := "mkdir", args := #["-p", conf.depsDir]};
     pure ⟨leanHome, [ leanHome, "bin", "lean" ].joinPath, "ar", "c++"⟩
   | _ => throw (IO.Error.userError "Environment variable LEAN_HOME not found")
 
@@ -19,8 +19,7 @@ def eval : Command → IO Unit
   match conf.build with
   | BuildType.executable => do
     let name := conf.getBinary;
-    IO.println ("Starting: " ++ name);
-    let _ ← IO.runCmd [".", name].joinPath;
+    runCmdPretty { cmd := [".", name].joinPath };
     pure ()
   | BuildType.library =>
     IO.println "Cannot start a library"
@@ -52,8 +51,8 @@ def eval : Command → IO Unit
   else pure ()
 | Command.help => IO.println Command.helpString
 | Command.app app => do
-  let _ ← IO.runCmd (Repo.cmd "." app.toRepo)
-  let _ ← IO.runCmd "rm -rf .git"
+  runCmdPretty (Repo.cmd "." app.toRepo)
+  let _ ← IO.Process.run { cmd := "rm", args := #["-rf", ".git"] }
   pure ()
 | Command.nope => pure ()
 

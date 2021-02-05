@@ -1,6 +1,3 @@
-@[extern 2 "lean_io_run_cmd"]
-constant IO.runCmd (s : @& String) : IO UInt32
-
 @[extern 2 "lean_io_chdir"]
 constant IO.chdir (s : @& String) : IO UInt32
 
@@ -10,8 +7,8 @@ constant IO.remove (s : @& String) : IO UInt32
 @[extern 3 "lean_io_set_env"]
 constant IO.setEnv (name val : @& String) : IO UInt32
 
-def List.joinPath : List String → String :=
-String.intercalate (String.singleton System.FilePath.pathSeparator)
+abbrev List.joinPath : List String → String :=
+System.mkFilePath
 
 def List.space : List String → String :=
 String.intercalate " "

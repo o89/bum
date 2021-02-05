@@ -1,6 +1,7 @@
-import Init.System.IO
 import Init.System.FilePath
 import bum.configconverter
+
+open IO.Process
 
 def Lean.deps := [ "-ldl", "-lgmp", "-Wl,--end-group", "-lLean",
                    "-lStd", "-lInit", "-lleancpp", "-Wl,--start-group" ]
@@ -9,56 +10,69 @@ def Lean.cppOptions := [ "-no-pie", "-pthread", "-Wno-unused-command-line-argume
 
 def config := "bum.config"
 
-def runCmdPretty (additionalInfo s : String) : IO Unit := do
-  IO.println ("==> " ++ s ++ " " ++ additionalInfo);
-  let exitv ← IO.runCmd s;
-  let errorStr := "process exited with code " ++ toString exitv;
-  IO.cond (exitv ≠ 0) $ throw (IO.Error.userError errorStr)
+def runCmdPretty (proc : SpawnArgs) (s : Option String := none) : IO Unit := do
+  let info := s.getD ""
 
-def sourceOlean (tools : Tools) : Source → Option (List String)
+  match proc.cwd with
+  | some cwd => println! ">>> {cwd}"
+  | none => pure ()
+  println! "==> {proc.cmd} {proc.args.toList.space} {info}"
+
+  let child ← spawn proc
+  let exitCode ← child.wait
+
+  if exitCode ≠ 0 then
+    s! "process “{proc.cmd}” exited with code {exitCode}"
+    |> IO.userError |> throw
+
+  pure ()
+
+def sourceOlean (tools : Tools) : Source → Option (List SpawnArgs)
 | src@(Source.lean path) =>
-  some [ [ tools.lean, "-o", src.asOlean, src.path ].space ]
+  some [ { cmd := tools.lean, args := #["-o", src.asOlean, src.path] } ]
 | _ => none
 
-def getInclude (tools : Tools) : String :=
-"-I" ++ [ tools.leanHome, "include" ].joinPath
+def getInclude (tools : Tools) : Array String :=
+#["-I" ++ [ tools.leanHome, "include" ].joinPath]
 
-def sourceCommands (tools : Tools) : Source → List String
+def sourceCommands (tools : Tools) : Source → List SpawnArgs
 | src@(Source.lean path) =>
-  List.map List.space
-    [ [ tools.lean, "-o", src.asOlean, src.path ],
-      [ "(", "cd", "src", ";", tools.lean,
-        "-c", ["..", src.asCpp].joinPath,
-              ["..", src.path].joinPath, ")" ],
-      [ tools.cpp, getInclude tools, "-c", src.asCpp, "-o", src.obj ] ]
+  [ -- generate olean
+    { cmd  := tools.lean, args := #["-o", src.asOlean, src.path] },
+    -- compile into .cpp
+    { cmd  := tools.lean,
+      args := #["-c", ["..", src.asCpp].joinPath, ["..", src.path].joinPath]
+      cwd  := [".", "src"].joinPath },
+    -- emit .o
+    { cmd  := tools.cpp,
+      args := getInclude tools ++ #["-c", src.asCpp, "-o", src.obj] } ]
 | src@(Source.cpp path) =>
-  List.map List.space
-    [ [ tools.cpp, getInclude tools, "-c", src.path, "-o", src.obj ] ]
+  [ { cmd := tools.cpp,
+      args := getInclude tools ++ #["-c", src.path, "-o", src.obj] } ]
 
-def sourceLink
-  (output : String) (tools : Tools)
-  (files : List Source) (flags : List String) :=
-List.space ([ tools.ar, "rvs", output ] ++ List.map Source.obj files ++ flags)
+def sourceLink (output : String) (tools : Tools)
+  (files : List Source) (flags : List String) : List SpawnArgs :=
+[ { cmd := tools.ar,
+    args := #["rvs", output] ++ Array.map Source.obj files.toArray ++
+            flags.toArray } ]
 
 def sourceCompile (output : String) (tools : Tools)
-  (files : List Source) (libs flags : List String) :=
-List.space $
-  [ tools.cpp ] ++ Lean.cppOptions ++
-  [ "-o", output ] ++
-  (List.map Source.obj files).reverse ++
-  libs.reverse ++ flags ++
-  [ "-L" ++ tools.leanHome ++ "/lib/lean" ]
+  (files : List Source) (libs flags : List String) : List SpawnArgs :=
+[ { cmd := tools.cpp,
+    args := Lean.cppOptions.toArray ++ #["-o", output] ++
+            (List.map Source.obj files).reverse.toArray ++
+            libs.reverse.toArray ++ flags.toArray ++
+            #["-L" ++ tools.leanHome ++ "/lib/lean"] } ]
 
-def compileCommands
-  (conf : Project) (tools : Tools)
-  (libs flags : List String) :=
+def compileCommands (conf : Project) (tools : Tools)
+  (libs flags : List String) : List SpawnArgs :=
 match conf.build with
 | BuildType.executable =>
   List.join (List.map (sourceCommands tools) conf.files) ++
-  [ sourceCompile conf.getBinary tools conf.files libs flags ]
+  sourceCompile conf.getBinary tools conf.files libs flags
 | BuildType.library =>
   List.join (List.map (sourceCommands tools) conf.files) ++
-  [ sourceLink conf.getBinary tools conf.files flags ]
+  sourceLink conf.getBinary tools conf.files flags
 
 def oleanCommands (conf : Project) (tools : Tools) :=
 List.join (List.filterMap (sourceOlean tools) conf.files)
@@ -67,8 +81,7 @@ def procents {α : Type} (xs : List α) : List (Nat × α) :=
 List.map (λ (p : Nat × α) => (p.1 * 100 / xs.length, p.2)) xs.enum
 
 def compileProject (conf : Project) (tools : Tools) (libs : List String) : IO Unit :=
-let runPretty :=
-λ (p : Nat × String) => runCmdPretty ("(" ++ toString p.1 ++ " %)") p.2;
+let runPretty := λ p => runCmdPretty p.2 (some s!"({p.1} %)");
 let actions := List.map runPretty
   (procents $ compileCommands conf tools libs conf.cppFlags);
 IO.println ("Compiling " ++ conf.name) >> forM' id actions
@@ -101,12 +114,8 @@ partial def resolveDepsAux (depsDir : String) (download : Bool) :
 
   let isThere ← IO.fileExists confPath;
   IO.cond (¬isThere ∧ download) (do
-    IO.println ("==> downloading " ++ dep.name ++ " (of " ++ parent ++ ")");
-    let exitv ← IO.runCmd (Dep.cmd depsDir dep);
-    let err :=
-      "downloading of “" ++ dep.name ++
-      "” failed with code " ++ toString exitv;
-    IO.cond (exitv ≠ 0) $ throw (IO.Error.userError err));
+    IO.println ("==> downloading " ++ dep.name ++ " (of " ++ parent ++ ")")
+    runCmdPretty (Dep.cmd depsDir dep))
 
   let conf ← readConf confPath;
   let projects ← sequence (List.map (resolveDepsAux depsDir download dep.name) conf.deps);
@@ -174,7 +183,7 @@ def build (tools : Tools) (conf : Project) : IO Unit := do
 
 def olean (tools : Tools) (conf : Project) : IO Unit := do
   IO.println ("Generate .olean for " ++ conf.name);
-  List.forM (runCmdPretty "") (oleanCommands conf tools)
+  List.forM runCmdPretty (oleanCommands conf tools)
 
 def recOlean (tools : Tools) (conf : Project) : IO Unit := do
   let deps ← setLeanPath conf;

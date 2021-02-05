@@ -1,3 +1,5 @@
+open IO.Process (SpawnArgs)
+
 inductive Application
 | zero | n2o | nitro
 
@@ -79,15 +81,15 @@ def Application.toRepo : Application → Repo
 | Application.n2o   => Repo.github "o89/sample-n2o"
 | Application.nitro => Repo.github "o89/sample-nitro"
 
-def Repo.cmd (target : String) : Repo → String
-| Repo.none        => ""
-| Repo.git url     => s!"git clone {url} {target}"
-| Repo.github repo => s!"git clone https://github.com/{repo} {target}"
+def Repo.cmd (target : String) : Repo → SpawnArgs
+| Repo.none        => { cmd := "echo", args := #["-n"] }
+| Repo.git url     => { cmd := "git",  args := #["clone", url, target] }
+| Repo.github repo => { cmd := "git",  args := #["clone", s!"https://github.com/{repo}", target ] }
 
 structure Dep :=
 (name : String) (source : Repo)
 
-def Dep.cmd (depsDir : String) (x : Dep) : String :=
+def Dep.cmd (depsDir : String) (x : Dep) : SpawnArgs :=
 Repo.cmd (depsDir ++ "/" ++ x.name) x.source
 
 instance : ToString Dep :=
