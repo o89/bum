@@ -51,7 +51,10 @@ def eval : Command → IO Unit
     IO.println (String.intercalate "\n" toPrint)
   else pure ()
 | Command.help => IO.println Command.helpString
-| Command.app app => IO.runCmd (Repo.cmd "." app.toRepo) >>= λ _ => pure ()
+| Command.app app => do
+  let _ ← IO.runCmd (Repo.cmd "." app.toRepo)
+  let _ ← IO.runCmd "rm -rf .git"
+  pure ()
 | Command.nope => pure ()
 
 def evalList : List Command → IO Unit
