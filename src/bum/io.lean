@@ -12,8 +12,8 @@ def Lean.cppOptions := [ "-no-pie", "-pthread", "-Wno-unused-command-line-argume
 def config := "bum.config"
 
 structure Action extends SpawnArgs :=
-(file    : Option Source := none)
-(silent? : Bool          := true)
+(old? : IO Bool := pure true)
+(skip : IO Unit := pure ())
 
 def exec (proc : SpawnArgs) (s : Option String := none) : IO Unit := do
   let info := s.getD ""
@@ -28,44 +28,14 @@ def exec (proc : SpawnArgs) (s : Option String := none) : IO Unit := do
 
   pure ()
 
-def sourceOlean (tools : Tools) : Source → List Action
-| src@(Source.lean path) =>
-  [ { cmd := tools.lean, args := #["-o", src.asOlean, src.path],
-      file := src, silent? := false } ]
-| _ => []
+def uptodate (filename : String) : IO Unit :=
+println! "“{filename}” is already up to date, skip."
 
-def getInclude (tools : Tools) : Array String :=
-#["-I" ++ [ tools.leanHome, "include" ].joinPath]
+def Source.skip : Source → IO Unit :=
+uptodate ∘ Source.path
 
-def sourceCommands (tools : Tools) (dir : String) : Source → List Action
-| src@(Source.lean path) =>
-  [ -- generate olean
-    { cmd  := tools.lean, args := #["-o", src.asOlean, src.path],
-      file := src, silent? := false },
-    -- compile into .cpp
-    { cmd  := tools.lean, file := src,
-      args := #["-c", ["..", src.asCpp].joinPath, ["..", src.path].joinPath]
-      cwd  := dir },
-    -- emit .o
-    { cmd  := tools.cpp, file := src,
-      args := getInclude tools ++ #["-c", src.asCpp, "-o", src.obj] } ]
-| src@(Source.cpp path) =>
-  [{ cmd := tools.cpp, file := src, silent? := false,
-     args := getInclude tools ++ #["-c", src.path, "-o", src.obj] } ]
-
-def sourceLink (output : String) (tools : Tools)
-  (files : List Source) (flags : List String) : List Action :=
-[ { cmd := tools.ar,
-    args := #["rvs", output] ++ Array.map Source.obj files.toArray ++
-              flags.toArray } ]
-
-def sourceCompile (output : String) (tools : Tools)
-  (files : List Source) (libs flags : List String) : List Action :=
-[ { cmd := tools.cpp,
-    args := Lean.cppOptions.toArray ++ #["-o", output] ++
-            (List.map Source.obj files).reverse.toArray ++
-            libs.reverse.toArray ++ flags.toArray ++
-            #["-L" ++ tools.leanHome ++ "/lib/lean"] } ]
+def IO.enoent (path : String) : IO Bool :=
+not <$> IO.fileExists path
 
 def IO.getLastWriteTime! (path : String) : IO UInt64 := do
   if (← IO.fileExists path) then
@@ -79,6 +49,45 @@ def rebuild? (v : Source) : IO Bool := do
     | Source.lean val => v.asOlean
     | Source.cpp val  => v.obj)
   pure (mtime₁ > mtime₂)
+
+def sourceOlean (tools : Tools) : Source → List Action
+| src@(Source.lean path) =>
+  [ { cmd := tools.lean, args := #["-o", src.asOlean, src.path],
+      skip := src.skip, old? := rebuild? src } ]
+| _ => []
+
+def getInclude (tools : Tools) : Array String :=
+#["-I" ++ [ tools.leanHome, "include" ].joinPath]
+
+def sourceCommands (tools : Tools) (dir : String) : Source → List Action
+| src@(Source.lean path) =>
+  [ -- generate olean
+    { cmd  := tools.lean, args := #["-o", src.asOlean, src.path],
+      skip := src.skip, old? := rebuild? src },
+    -- compile into .cpp
+    { cmd  := tools.lean, old? := rebuild? src,
+      args := #["-c", ["..", src.asCpp].joinPath, ["..", src.path].joinPath]
+      cwd  := dir },
+    -- emit .o
+    { cmd  := tools.cpp, old? := rebuild? src,
+      args := getInclude tools ++ #["-c", src.asCpp, "-o", src.obj] } ]
+| src@(Source.cpp path) =>
+  [{ cmd := tools.cpp, old? := rebuild? src, skip := src.skip,
+     args := getInclude tools ++ #["-c", src.path, "-o", src.obj] } ]
+
+def sourceLink (output : String) (tools : Tools)
+  (files : List Source) (flags : List String) : List Action :=
+[ { cmd := tools.ar, old? := IO.enoent output, skip := uptodate output,
+    args := #["rvs", output] ++ Array.map Source.obj files.toArray ++
+              flags.toArray } ]
+
+def sourceCompile (output : String) (tools : Tools)
+  (files : List Source) (libs flags : List String) : List Action :=
+[ { cmd := tools.cpp, old? := IO.enoent output, skip := uptodate output,
+    args := Lean.cppOptions.toArray ++ #["-o", output] ++
+            (List.map Source.obj files).reverse.toArray ++
+            libs.reverse.toArray ++ flags.toArray ++
+            #["-L" ++ tools.leanHome ++ "/lib/lean"] } ]
 
 def compileCommands (conf : Project) (tools : Tools)
   (libs flags : List String) : List Action :=
@@ -98,32 +107,18 @@ List.map (λ (p : Nat × α) => (p.1 * 100 / xs.length, p.2)) xs.enum
 def performAction (force : IO.Ref Bool) : Nat × Action → IO Unit :=
 λ (n, act) => do
   let info := some s!"({n} %)"
-  match act.file with
-  | some val =>
-    let old?   ← rebuild? val
-    let force? ← force.get
-    let run? := force? ∨ old?
-    force.set run?
+  let old? ← act.old?
+  let force? ← force.get
+  let run? := force? ∨ old?
+  force.set run?
 
-    if run? then exec act.toSpawnArgs info
-    else if ¬act.silent? then println! "“{val.path}” is already up to date, skip."
-  | none => exec act.toSpawnArgs info
-
-def checkObj (force : IO.Ref Bool) (act : Action) : IO Unit :=
-match act.file with
-| some val => do
-  let force?  ← force.get
-  let exists? ← IO.fileExists val.obj
-  force.set (force? ∨ ¬exists?)
-| none => pure ()
+  if run? then exec act.toSpawnArgs info else act.skip
 
 def compileProject (force : IO.Ref Bool) (conf : Project)
   (tools : Tools) (libs : List String) : IO Unit := do
   IO.println ("Compiling " ++ conf.name)
   compileCommands conf tools libs conf.cppFlags
-  |> procents |> List.forM (λ (n, act) => do
-    checkObj force act
-    performAction force (n, act))
+  |> procents |> List.forM (performAction force)
 
 def silentRemove (filename : String) : IO Unit :=
 IO.remove filename >>= λ _ => pure ()
