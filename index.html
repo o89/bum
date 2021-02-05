@@ -46,8 +46,8 @@ $ sudo cp bum /usr/local/bin</code>
     invoke = bum  | bum list
       list = []   | command [options] list
    command = app (zero|n2o|nitro) | deps
-           | compile | clean [this|all]
-           | start   | olean [this|all]</figure></code>
+           | compile | clean [recur]
+           | start   | olean [recur]</figure></code>
         <p>Where: <div><ul>
             <li><b>(a|…)</b> represents <b>a or …</b></li>
             <li><b>[a|…]</b> represents <b>a or … or nothing</b></li>
@@ -55,32 +55,32 @@ $ sudo cp bum /usr/local/bin</code>
     </section>
     <section>
         <h3>CONFIG FILE</h3>
-        <p>BUM uses Lean 4 parser to parse configuration files.
-           In the configuration file should be following definitions:
-           <b>app</b>, <b>build</b>, <b>depsDir</b>, <b>files</b>.
+        <p>BUM configuration file consists of lines in the folowwing form: <code>{key,value}.</code>
+           In the configuration file should be following keys:
+           <b>app</b>, <b>build</b>, <b>files</b>.
            Also there can be following optional definitions:
-           <b>deps</b> and <b>cppLibs</b>. This is configuration file for
+           <b>deps</b>, <b>deps-dir</b> and <b>cpp-libs</b>.
+            This is configuration file for
            <a href="https://github.com/o89/sample-nitro">NITRO sample</a>
            application:</p>
-        <figure><code>def app     := "sample-nitro"
-def build   := exec
-def depsDir := "deps"
-def files   := [ "sample.lean" ]
-def deps    := [ ⟨n2o, ⟨github, "o89/n2o"⟩⟩,
-                 ⟨nitro, ⟨github, "o89/nitro"⟩⟩ ]
+        <figure><code>{app, NITRO}.
+{build, lib}.
+{deps, [{n2o, {git, "https://github.com/o89/n2o"}}]}.
+{files, [NITRO/Tags.lean, NITRO/Elements.lean, NITRO/JavaScript.lean,
+         NITRO/Proto.lean, NITRO/Default.lean]}.
         </code></figure>
         <p>Known definitions:</p>
         <ul style="list-style-type:circle;">
             <li><b>app</b> is the name of the application, which should be a string.</li>
             <li><b>build</b> represents the application build type: <b>exec</b> or <b>lib</b>
                (which can be used as a dependency).</li>
-            <li><b>depsDir</b> is the place where BUM stores dependencies
+            <li><b>deps-dir</b> is the place where BUM stores dependencies
                 for the current application.</li>
             <li><b>files</b> is a list of source files.
                 Each source can be <b>.cpp</b> or <b>.lean</b> file.</li>
             <li><b>deps</b> is the list of tuples: ⟨name, ⟨source, url⟩⟩.
                 <b>source</b> can be <b>git</b> or <b>github</b>.</li>
-            <li><b>cppLibs</b> is an optional list that contains C/C++ library names
+            <li><b>cpp-libs</b> is an optional list that contains C/C++ library names
                 that will be linked with the application in the following way:
                 each string from this list will be added to C++ compiler as <b>-lname</b>.</li>
         </ul>
@@ -132,13 +132,13 @@ OK</code>
         <h3>CLEAN</h3>
         <p>Remove all <b>.olean</b>, <b>.cpp</b> (if they are generated from <b>.lean</b> files)
            and <b>.o</b> files from current project and all project dependencies
-           if <b>clean</b> was called with the <b>all</b> options.</p>
+           if <b>clean</b> was called with the <b>recur</b> option.</p>
     </section>
     <section>
         <h3>OLEAN</h3>
         <p>Generate <b>.olean</b> files.
            This is useful when the project is, for example, a mathematical library.
-           <b>this|all</b> option behaves in the same way as in the <b>clean</b> command.
+           <b>recur</b> option behaves in the same way as in the <b>clean</b> command.
         </p>
     </section>
 </main><footer>
