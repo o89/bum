@@ -39,16 +39,16 @@ protected def Command.groupAux :
 protected def Command.group := Command.groupAux ("", []) []
 
 protected def Command.ofString : String × List String → Except String Command
-| ("compile", [])       => pure Command.compile
-| ("start", [])         => pure Command.start
-| ("deps", [])          => pure Command.deps
-| ("clean", [])         => pure (Command.clean Scale.this)
-| ("clean", [ scale ])  => Command.clean <$> Scale.ofString scale
-| ("olean", [])         => pure (Command.olean Scale.this)
-| ("olean", [ scale ])  => Command.olean <$> Scale.ofString scale
-| ("app", [ template ]) => Command.app <$> Application.ofString template
-| ("", _)               => pure Command.nope
-| (cmd, _)              => throw ("unknown or malformed command “" ++ cmd ++"”")
+| ("compile", [])        => pure Command.compile
+| ("start", [])          => pure Command.start
+| ("deps", [])           => pure Command.deps
+| ("clean", [])          => pure (Command.clean Scale.this)
+| ("clean", [ "recur" ]) => Command.clean Scale.all
+| ("olean", [])          => pure (Command.olean Scale.this)
+| ("olean", [ "recur" ]) => Command.olean Scale.all
+| ("app", [ template ])  => Command.app <$> Application.ofString template
+| ("", _)                => pure Command.nope
+| (cmd, _)               => throw ("unknown or malformed command “" ++ cmd ++"”")
 
 protected def Command.ofList : List String → Except String (List Command) :=
 List.mapM Command.ofString ∘ Command.group
@@ -65,13 +65,13 @@ def Command.helpString :=
     invoke = bum  | bum list
       list = []   | command [options] list
    command = app (zero|n2o|nitro) | deps
-           | compile | clean [this|all]
-           | start   | olean [this|all]"
+           | compile | clean [recur]
+           | start   | olean [recur]"
 
 inductive Repo
-| none
-| git : String → Repo
 | github : String → Repo
+| git    : String → Repo
+| none
 
 -- TODO: remove hard-coded GitHub
 def Application.toRepo : Application → Repo
@@ -80,9 +80,9 @@ def Application.toRepo : Application → Repo
 | Application.nitro => Repo.github "o89/sample-nitro"
 
 def Repo.cmd (target : String) : Repo → String
-| Repo.none    => ""
-| Repo.git url => "git clone " ++ url ++ " " ++ target
-| Repo.github url => "git clone https://github.com/" ++ url ++ " " ++ target
+| Repo.none        => ""
+| Repo.git url     => s!"git clone {url} {target}"
+| Repo.github repo => s!"git clone https://github.com/{repo} {target}"
 
 structure Dep :=
 (name : String) (source : Repo)
