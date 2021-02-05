@@ -40,6 +40,8 @@ def parseRepo : Val → Except String Dep
   | "git" => Except.ok ⟨name, Repo.git url⟩
   | "github" => Except.ok ⟨name, Repo.github url⟩
   | _ => Except.error "unknown repository source"
+| Val.pair (Val.string name, Val.string "local") =>
+  Except.ok ⟨name, Repo.none⟩
 | _ => Except.error "invalid dependency"
 
 -- ???
@@ -61,7 +63,10 @@ def getStringList (id : String) : List Val → Except String (List String)
 def confGetDeps : List Val → Except String (List Dep)
 | hd :: tl =>
   match hd with
-  | Val.pair (Val.string "deps", Val.list deps) => parseRepos deps
+  | Val.pair (Val.string "deps", val) =>
+    match val with
+    | Val.list deps => parseRepos deps
+    | _             => Except.error "“deps” expects a list"
   | _ => confGetDeps tl
 | _ => Except.ok []
 

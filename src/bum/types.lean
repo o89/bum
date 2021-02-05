@@ -102,9 +102,9 @@ Repo.cmd (depsDir ++ "/" ++ x.name) x.source
 
 instance : ToString Dep :=
 ⟨λ s => match s with
-| ⟨name, Repo.none⟩    => name
+| ⟨name, Repo.none⟩       => name
 | ⟨name, Repo.github url⟩ => name ++ " github \"" ++ url ++ "\""
-| ⟨name, Repo.git url⟩ => name ++ " git \"" ++ url ++ "\""⟩
+| ⟨name, Repo.git url⟩    => name ++ " git \"" ++ url ++ "\""⟩
 
 inductive BuildType
 | executable | library

@@ -158,6 +158,12 @@ partial def resolveDepsAux (depsDir : String) (download : Bool) :
   }
 
   let conf ← readConf confPath;
+  match conf.build with
+  | BuildType.executable =>
+    s!"{conf.name} is not a library and cannot be project dependency"
+    |> IO.Error.userError |> throw
+  | _ => pure ()
+
   let projects ← sequence (List.map (resolveDepsAux depsDir download dep.name) conf.deps);
   pure (List.join projects ++ [ (dep.name, conf) ])
 
