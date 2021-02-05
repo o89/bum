@@ -1,16 +1,14 @@
 import Init.System.FilePath
 import bum.configconverter
+import Std.Data
 
 open IO.Process
 
-def Lean.deps := [ "-ldl", "-lgmp", "-Wl,--end-group", "-lLean",
-                   "-lStd", "-lInit", "-lleancpp", "-Wl,--start-group" ]
+structure Action extends SpawnArgs :=
+(file    : Option Source := none)
+(silent? : Bool          := true)
 
-def Lean.cppOptions := [ "-no-pie", "-pthread", "-Wno-unused-command-line-argument" ]
-
-def config := "bum.config"
-
-def runCmdPretty (proc : SpawnArgs) (s : Option String := none) : IO Unit := do
+def exec (proc : SpawnArgs) (s : Option String := none) : IO Unit := do
   let info := s.getD ""
 
   match proc.cwd with
@@ -27,64 +25,109 @@ def runCmdPretty (proc : SpawnArgs) (s : Option String := none) : IO Unit := do
 
   pure ()
 
-def sourceOlean (tools : Tools) : Source → Option (List SpawnArgs)
+def Lean.deps := [ "-ldl", "-lgmp", "-Wl,--end-group", "-lLean",
+                   "-lStd", "-lInit", "-lleancpp", "-Wl,--start-group" ]
+
+def Lean.cppOptions := [ "-no-pie", "-pthread", "-Wno-unused-command-line-argument" ]
+
+def config := "bum.config"
+
+def sourceOlean (tools : Tools) : Source → List Action
 | src@(Source.lean path) =>
-  some [ { cmd := tools.lean, args := #["-o", src.asOlean, src.path] } ]
-| _ => none
+  [ { cmd := tools.lean, args := #["-o", src.asOlean, src.path],
+      file := src, silent? := false } ]
+| _ => []
 
 def getInclude (tools : Tools) : Array String :=
 #["-I" ++ [ tools.leanHome, "include" ].joinPath]
 
-def sourceCommands (tools : Tools) : Source → List SpawnArgs
+def sourceCommands (tools : Tools) : Source → List Action
 | src@(Source.lean path) =>
   [ -- generate olean
-    { cmd  := tools.lean, args := #["-o", src.asOlean, src.path] },
+    { cmd  := tools.lean, args := #["-o", src.asOlean, src.path],
+      file := src, silent? := false },
     -- compile into .cpp
-    { cmd  := tools.lean,
+    { cmd  := tools.lean, file := src,
       args := #["-c", ["..", src.asCpp].joinPath, ["..", src.path].joinPath]
       cwd  := [".", "src"].joinPath },
     -- emit .o
-    { cmd  := tools.cpp,
+    { cmd  := tools.cpp, file := src,
       args := getInclude tools ++ #["-c", src.asCpp, "-o", src.obj] } ]
 | src@(Source.cpp path) =>
-  [ { cmd := tools.cpp,
-      args := getInclude tools ++ #["-c", src.path, "-o", src.obj] } ]
+  [{ cmd := tools.cpp, file := src, silent? := false,
+     args := getInclude tools ++ #["-c", src.path, "-o", src.obj] } ]
 
 def sourceLink (output : String) (tools : Tools)
-  (files : List Source) (flags : List String) : List SpawnArgs :=
+  (files : List Source) (flags : List String) : List Action :=
 [ { cmd := tools.ar,
     args := #["rvs", output] ++ Array.map Source.obj files.toArray ++
-            flags.toArray } ]
+              flags.toArray } ]
 
 def sourceCompile (output : String) (tools : Tools)
-  (files : List Source) (libs flags : List String) : List SpawnArgs :=
+  (files : List Source) (libs flags : List String) : List Action :=
 [ { cmd := tools.cpp,
     args := Lean.cppOptions.toArray ++ #["-o", output] ++
             (List.map Source.obj files).reverse.toArray ++
             libs.reverse.toArray ++ flags.toArray ++
             #["-L" ++ tools.leanHome ++ "/lib/lean"] } ]
 
+def IO.getLastWriteTime! (path : String) : IO UInt64 := do
+  if (← IO.fileExists path) then
+    IO.getLastWriteTime path
+  else pure 0
+
+def rebuild? (v : Source) : IO Bool := do
+  let mtime₁ ← IO.getLastWriteTime! v.path
+  let mtime₂ ← IO.getLastWriteTime!
+    (match v with
+    | Source.lean val => v.asOlean
+    | Source.cpp val  => v.obj)
+  pure (mtime₁ > mtime₂)
+
 def compileCommands (conf : Project) (tools : Tools)
-  (libs flags : List String) : List SpawnArgs :=
+  (libs flags : List String) : List Action :=
+List.join (List.map (sourceCommands tools) conf.files) ++
 match conf.build with
 | BuildType.executable =>
-  List.join (List.map (sourceCommands tools) conf.files) ++
   sourceCompile conf.getBinary tools conf.files libs flags
 | BuildType.library =>
-  List.join (List.map (sourceCommands tools) conf.files) ++
   sourceLink conf.getBinary tools conf.files flags
 
 def oleanCommands (conf : Project) (tools : Tools) :=
-List.join (List.filterMap (sourceOlean tools) conf.files)
+List.join (List.map (sourceOlean tools) conf.files)
 
 def procents {α : Type} (xs : List α) : List (Nat × α) :=
 List.map (λ (p : Nat × α) => (p.1 * 100 / xs.length, p.2)) xs.enum
 
-def compileProject (conf : Project) (tools : Tools) (libs : List String) : IO Unit :=
-let runPretty := λ p => runCmdPretty p.2 (some s!"({p.1} %)");
-let actions := List.map runPretty
-  (procents $ compileCommands conf tools libs conf.cppFlags);
-IO.println ("Compiling " ++ conf.name) >> List.forM id actions
+def performAction (force : IO.Ref Bool) : Nat × Action → IO Unit :=
+λ (n, act) => do
+  let info := some s!"({n} %)"
+  match act.file with
+  | some val =>
+    let old?   ← rebuild? val
+    let force? ← force.get
+    let run? := force? ∨ old?
+    force.set run?
+
+    if run? then exec act.toSpawnArgs info
+    else if ¬act.silent? then println! "“{val.path}” is already up to date, skip."
+  | none => exec act.toSpawnArgs info
+
+def checkObj (force : IO.Ref Bool) (act : Action) : IO Unit :=
+match act.file with
+| some val => do
+  let force?  ← force.get
+  let exists? ← IO.fileExists val.obj
+  force.set (force? ∨ ¬exists?)
+| none => pure ()
+
+def compileProject (force : IO.Ref Bool) (conf : Project)
+  (tools : Tools) (libs : List String) : IO Unit := do
+  IO.println ("Compiling " ++ conf.name)
+  compileCommands conf tools libs conf.cppFlags
+  |> procents |> List.forM (λ (n, act) => do
+    checkObj force act
+    performAction force (n, act))
 
 def silentRemove (filename : String) : IO Unit :=
 IO.remove filename >>= λ _ => pure ()
@@ -115,7 +158,7 @@ partial def resolveDepsAux (depsDir : String) (download : Bool) :
   let isThere ← IO.fileExists confPath;
   if (¬isThere ∧ download) then {
     IO.println ("==> downloading " ++ dep.name ++ " (of " ++ parent ++ ")");
-    runCmdPretty (Dep.cmd depsDir dep)
+    exec (Dep.cmd depsDir dep)
   }
 
   let conf ← readConf confPath;
@@ -141,33 +184,29 @@ List.map (String.append "-l") conf.snd.cppLibs
 
 def evalDep {α : Type} (depsDir : String) (rel : Path)
   (action : IO α) : IO α := do
-  let cwd ← IO.realPath ".";
-  let path := [ depsDir, rel ].joinPath;
+  let cwd ← IO.realPath "."
+  let path := [ depsDir, rel ].joinPath
 
-  let exitv ← IO.chdir path;
+  let exitv ← IO.chdir path
   unless (exitv = 0) do {
     throw (IO.Error.userError s!"cannot chdir to {path}")
   }
 
-  let val ← action;
-  let _ ← IO.chdir cwd;
+  let val ← action
+  let _ ← IO.chdir cwd
   pure val
 
-def buildAux (tools : Tools) (depsDir : String)
-  (doneRef : IO.Ref (List String)) :
-  Bool → Deps → IO Unit
-| _, [] => pure ()
-| needsRebuild', hd :: tl => do
-  let done ← doneRef.get;
-  if done.notElem hd.snd.name then do
-    let needsRebuild ← evalDep depsDir hd.fst (do
-      let needsRebuild ← or needsRebuild' <$> not <$> IO.fileExists hd.snd.getBinary;
-      if needsRebuild then { compileProject hd.snd tools [] }
-      pure needsRebuild);
+def buildAux (tools : Tools) (depsDir : String) (force : IO.Ref Bool)
+  (doneRef : IO.Ref (Std.HashSet String)) : Deps → IO Unit
+| [] => pure ()
+| hd :: tl => do
+  let done ← doneRef.get
+  if ¬ done.contains hd.snd.name then {
+    evalDep depsDir hd.fst (compileProject force hd.snd tools []);
 
-    doneRef.set (hd.snd.name :: done);
-    buildAux tools depsDir doneRef needsRebuild tl
-  else buildAux tools depsDir doneRef needsRebuild' tl
+    doneRef.set (done.insert hd.snd.name);
+    buildAux tools depsDir force doneRef tl
+  } else buildAux tools depsDir force doneRef tl
 
 def setLeanPath (conf : Project) : IO Deps := do
   let deps ← resolveDeps conf;
@@ -175,27 +214,35 @@ def setLeanPath (conf : Project) : IO Deps := do
   List.forM addToLeanPath leanPath;
   pure deps
 
-def build (tools : Tools) (conf : Project) : IO Unit := do
+def build (tools : Tools) (conf : Project) (force? := false) : IO Unit := do
   let deps ← setLeanPath conf;
-  let ref ← IO.mkRef [];
-  buildAux tools conf.depsDir ref false deps;
+
+  let force ← IO.mkRef force?;
+  let done  ← IO.mkRef Std.mkHashSet;
+
+  buildAux tools conf.depsDir force done deps;
   let libs :=
     Lean.deps ++
     List.join (List.map getCppLibraries deps) ++
     List.map (getDepBinaryPath conf.depsDir) deps;
-  compileProject conf tools libs
 
-def olean (tools : Tools) (conf : Project) : IO Unit := do
+  compileProject force conf tools libs
+
+def olean (force : IO.Ref Bool) (tools : Tools) (conf : Project) : IO Unit := do
   IO.println ("Generate .olean for " ++ conf.name);
-  List.forM runCmdPretty (oleanCommands conf tools)
+  oleanCommands conf tools
+  |> procents |> List.forM (performAction force)
 
-def recOlean (tools : Tools) (conf : Project) : IO Unit := do
-  let deps ← setLeanPath conf;
+def oleanRecur (tools : Tools) (conf : Project) (force? := false) : IO Unit := do
+  let deps ← setLeanPath conf
+  let force ← IO.mkRef force?
+
   List.forM
-    (λ (cur : Path × Project) =>
-      evalDep conf.depsDir cur.fst (olean tools cur.snd))
-    deps;
-  olean tools conf
+    (λ (path, project) =>
+      olean force tools project
+      |> evalDep conf.depsDir path)
+    deps
+  olean force tools conf
 
 def clean (conf : Project) : IO Unit := do
   let conf ← readConf config;
@@ -203,7 +250,7 @@ def clean (conf : Project) : IO Unit := do
   conf.getBinary :: List.join (List.map Source.garbage conf.files);
   List.forM silentRemove buildFiles  
 
-def cleanRec (conf : Project) : IO Unit := do
+def cleanRecur (conf : Project) : IO Unit := do
   let deps ← resolveDeps conf;
   List.forM
     (λ (cur : Path × Project) =>

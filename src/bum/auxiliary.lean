@@ -4,6 +4,9 @@ constant IO.chdir (s : @& String) : IO UInt32
 @[extern 2 "lean_io_remove"]
 constant IO.remove (s : @& String) : IO UInt32
 
+@[extern 2 "lean_get_last_write_time"]
+constant IO.getLastWriteTime (path : @& String) : IO UInt64
+
 @[extern 3 "lean_io_set_env"]
 constant IO.setEnv (name val : @& String) : IO UInt32
 

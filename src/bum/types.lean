@@ -11,20 +11,15 @@ def Application.ofString : String → Except String Application
 | s       => Except.error ("unknown template “" ++ s ++"”")
 
 inductive Scale
-| this | all
-
-instance : Inhabited Scale := ⟨Scale.this⟩
-
-def Scale.ofString : String → Except String Scale
-| "this" => Except.ok Scale.this
-| "all"  => Except.ok Scale.all
-| s      => Except.error ("unknown scale “" ++ s ++"”")
+| current | total
+instance : Inhabited Scale := ⟨Scale.current⟩
 
 inductive Command
-| app : Application → Command | deps | compile
-| start | clean : Scale → Command
-| olean : Scale → Command
-| help | nope
+| app     : Application → Command
+| compile : Bool → Command
+| clean   : Scale → Command
+| olean   : Scale → Bool → Command
+| help | nope | deps | start
 
 protected def Command.reserved :=
 [ "compile", "start", "deps", "clean", "olean", "app" ]
@@ -42,13 +37,19 @@ protected def Command.groupAux :
 protected def Command.group := Command.groupAux ("", []) []
 
 protected def Command.ofString : String × List String → Except String Command
-| ("compile", [])        => Command.compile
+| ("compile", [])        => Command.compile false
+| ("compile", ["force"]) => Command.compile true
 | ("start", [])          => Command.start
 | ("deps", [])           => Command.deps
-| ("clean", [])          => Command.clean Scale.this
-| ("clean", [ "recur" ]) => Command.clean Scale.all
-| ("olean", [])          => Command.olean Scale.this
-| ("olean", [ "recur" ]) => Command.olean Scale.all
+| ("clean", [])          => Command.clean Scale.current
+| ("clean", ["recur"])   => Command.clean Scale.total
+| ("olean", keys)        =>
+  if ¬ keys.all (List.contains ["recur", "force"]) then
+    throw s!"olean expects only “recur” and “force” flags"
+  else
+    let scale := if keys.contains "recur" then Scale.total else Scale.current
+    let force := keys.contains "force"
+    Command.olean scale force
 | ("app", [ template ])  => Command.app <$> Application.ofString template
 | ("", _)                => Command.nope
 | (cmd, xs)              => throw s!"unknown or malformed command “{cmd} {xs.space}”"
@@ -68,8 +69,8 @@ def Command.helpString :=
     invoke = bum  | bum list
       list = []   | command [options] list
    command = app (zero|n2o|nitro) | deps
-           | compile | clean [recur]
-           | start   | olean [recur]"
+           | compile [force] | start
+           | clean   [recur] | olean [recur] [force]"
 
 inductive Repo
 | github : String → Repo
