@@ -20,9 +20,10 @@ inductive Command
 | clean   : Scale → Command
 | olean   : Scale → Bool → Command
 | help | nope | deps | start
+| leanPath | gitignore
 
 protected def Command.reserved :=
-[ "compile", "start", "deps", "clean", "olean", "app" ]
+[ "compile", "start", "deps", "clean", "olean", "app", "lean-path", "gitignore" ]
 
 protected def Command.groupAux :
   String × List String → List (String × List String) →
@@ -39,6 +40,8 @@ protected def Command.group := Command.groupAux ("", []) []
 protected def Command.ofString : String × List String → Except String Command
 | ("compile", [])        => Command.compile false
 | ("compile", ["force"]) => Command.compile true
+| ("lean-path", [])      => Command.leanPath
+| ("gitignore", [])      => Command.gitignore
 | ("start", [])          => Command.start
 | ("deps", [])           => Command.deps
 | ("clean", [])          => Command.clean Scale.current
@@ -66,11 +69,14 @@ def Command.parse : List String → Except String (List Command)
 def Command.helpString :=
 "BUM Lean 4 build tool
 
-    invoke = bum  | bum list
-      list = []   | command [options] list
-   command = app (zero|n2o|nitro) | deps
-           | compile [force] | start
-           | clean   [recur] | olean [recur] [force]"
+    invoke = bum           | bum list
+           | bum lean-path | bum gitignore
+
+      list = [] | command [options] list
+
+   command = app (zero|n2o|nitro)  | deps
+           | olean [recur] [force] | compile [force]
+           | clean [recur]         | start"
 
 inductive Repo
 | github : String → Repo
@@ -106,6 +112,10 @@ inductive BuildType
 inductive Source
 | lean : String → Source
 | cpp  : String → Source
+
+def Source.cpp? : Source → Bool
+| Source.lean _ => false
+| Source.cpp _  => true
 
 def Source.path : Source → String
 | Source.lean path => path ++ ".lean"

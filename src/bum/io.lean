@@ -4,6 +4,13 @@ import Std.Data
 
 open IO.Process
 
+def Lean.deps := [ "-ldl", "-lgmp", "-Wl,--end-group", "-lLean",
+                   "-lStd", "-lInit", "-lleancpp", "-Wl,--start-group" ]
+
+def Lean.cppOptions := [ "-no-pie", "-pthread", "-Wno-unused-command-line-argument" ]
+
+def config := "bum.config"
+
 structure Action extends SpawnArgs :=
 (file    : Option Source := none)
 (silent? : Bool          := true)
@@ -20,13 +27,6 @@ def exec (proc : SpawnArgs) (s : Option String := none) : IO Unit := do
     |> IO.userError |> throw
 
   pure ()
-
-def Lean.deps := [ "-ldl", "-lgmp", "-Wl,--end-group", "-lLean",
-                   "-lStd", "-lInit", "-lleancpp", "-Wl,--start-group" ]
-
-def Lean.cppOptions := [ "-no-pie", "-pthread", "-Wno-unused-command-line-argument" ]
-
-def config := "bum.config"
 
 def sourceOlean (tools : Tools) : Source → List Action
 | src@(Source.lean path) =>

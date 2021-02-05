@@ -54,13 +54,30 @@ def eval : Command → IO Unit
   exec (Repo.cmd "." app.toRepo)
   let _ ← IO.Process.run { cmd := "rm", args := #["-rf", ".git"] }
   pure ()
+| Command.gitignore =>
+  "“gitignore” can only be called individually: bum gitignore"
+  |> IO.userError |> throw
+| Command.leanPath =>
+  "“lean-path” can only be called individually: bum lean-path"
+  |> IO.userError |> throw
 | Command.nope => pure ()
 
 def evalList : List Command → IO Unit
 | [] => eval Command.help
+| [Command.nope, Command.leanPath] => do
+  let conf ← readConf config
+  let src ← IO.realPath conf.srcDir
+  println! "export LEAN_PATH=$LEAN_PATH:{src}"
+| [Command.nope, Command.gitignore] => do
+  let conf ← readConf config
+  List.filter Source.cpp? conf.files
+  |> List.map (λ file => s!"!{file.asCpp}")
+  |> (["*.olean", "*.o", "*.a", "*.cpp", conf.getBinary] ++ ·)
+  |> String.intercalate "\n"
+  |> IO.println
 | xs => List.forM eval xs >> IO.println "OK"
 
-def main (args : List String) :=
+def main (args : List String) : IO Unit :=
 match Command.parse args with
 | Except.ok v      => evalList v
 | Except.error err => IO.println err

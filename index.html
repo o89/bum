@@ -43,11 +43,14 @@ $ sudo cp bum /usr/local/bin</code>
         <figure><code> $ bum
 BUM Lean 4 build tool
 
-    invoke = bum  | bum list
-      list = []   | command [options] list
-   command = app (zero|n2o|nitro) | deps
-           | compile [force] | start
-           | clean   [recur] | olean [recur] [force]</figure></code>
+    invoke = bum           | bum list
+           | bum lean-path | bum gitignore
+
+      list = [] | command [options] list
+
+   command = app (zero|n2o|nitro)  | deps
+           | olean [recur] [force] | compile [force]
+           | clean [recur]         | start</figure></code>
         <p>Where: <div><ul>
             <li><b>(a|…)</b> represents <b>a or …</b></li>
             <li><b>[a|…]</b> represents <b>a or … or nothing</b></li>
