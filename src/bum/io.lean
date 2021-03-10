@@ -115,7 +115,7 @@ def compileProject (force : IO.Ref Bool) (conf : Project)
   (tools : Tools) (libs : List String) : IO Unit := do
   IO.println ("Compiling " ++ conf.name)
   compileCommands conf tools libs conf.cppFlags
-  |> procents |> List.forM (performAction force)
+  |> procents |> λ xs => List.forM xs (performAction force)
 
 def silentRemove (filename : String) : IO Unit :=
 IO.remove filename >>= λ _ => pure ()
@@ -203,7 +203,7 @@ def buildAux (tools : Tools) (depsDir : String) (force : IO.Ref Bool)
 def setLeanPath (conf : Project) : IO Deps := do
   let deps ← resolveDeps conf;
   let leanPath ← getLeanPathFromDeps conf.depsDir deps;
-  List.forM addToLeanPath leanPath;
+  List.forM leanPath addToLeanPath;
   pure deps
 
 def build (tools : Tools) (conf : Project) (force? := false) : IO Unit := do
@@ -223,29 +223,25 @@ def build (tools : Tools) (conf : Project) (force? := false) : IO Unit := do
 def olean (force : IO.Ref Bool) (tools : Tools) (conf : Project) : IO Unit := do
   IO.println ("Generate .olean for " ++ conf.name);
   oleanCommands conf tools
-  |> procents |> List.forM (performAction force)
+  |> procents |> λ xs => List.forM xs (performAction force)
 
 def oleanRecur (tools : Tools) (conf : Project) (force? := false) : IO Unit := do
   let deps ← setLeanPath conf
   let force ← IO.mkRef force?
 
-  List.forM
-    (λ (path, project) =>
-      olean force tools project
-      |> evalDep conf.depsDir path)
-    deps
+  List.forM deps λ (path, project) =>
+    olean force tools project
+    |> evalDep conf.depsDir path;
   olean force tools conf
 
 def clean (conf : Project) : IO Unit := do
   let conf ← readConf config;
   let buildFiles :=
   conf.getBinary :: List.join (List.map Source.garbage conf.files);
-  List.forM silentRemove buildFiles  
+  List.forM buildFiles silentRemove
 
 def cleanRecur (conf : Project) : IO Unit := do
   let deps ← resolveDeps conf;
-  List.forM
-    (λ (cur : Path × Project) =>
-      evalDep conf.depsDir cur.fst (clean cur.snd))
-    deps;
+  List.forM deps λ cur =>
+    evalDep conf.depsDir cur.fst (clean cur.snd);
   clean conf

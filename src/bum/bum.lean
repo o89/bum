@@ -75,7 +75,7 @@ def evalList : List Command → IO Unit
   |> (["*.olean", "*.o", "*.a", "*.cpp", conf.getBinary] ++ ·)
   |> String.intercalate "\n"
   |> IO.println
-| xs => List.forM eval xs >> IO.println "OK"
+| xs => List.forM xs eval >> IO.println "OK"
 
 def main (args : List String) : IO Unit :=
 match Command.parse args with
