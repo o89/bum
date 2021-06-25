@@ -1,5 +1,6 @@
 import bum.auxiliary
 open IO.Process (SpawnArgs)
+open System (FilePath)
 
 inductive Application
 | zero | n2o | nitro
@@ -97,8 +98,9 @@ def Repo.cmd (target : String) : Repo → SpawnArgs
 structure Dep :=
 (name : String) (source : Repo)
 
-def Dep.cmd (depsDir : String) (x : Dep) : SpawnArgs :=
-Repo.cmd (depsDir ++ "/" ++ x.name) x.source
+def sep := toString FilePath.pathSeparator
+def Dep.cmd (depsDir : FilePath) (x : Dep) : SpawnArgs :=
+Repo.cmd (toString depsDir ++ sep ++ x.name) x.source
 
 instance : ToString Dep :=
 ⟨λ s => match s with
@@ -117,38 +119,41 @@ def Source.cpp? : Source → Bool
 | Source.lean _ => false
 | Source.cpp _  => true
 
-def Source.path : Source → String
-| Source.lean path => path ++ ".lean"
-| Source.cpp path  => path ++ ".cpp"
+def file (name ext : String) : FilePath :=
+FilePath.mk (name ++ ext)
 
-def Source.subst (ext : String) : Source → String
-| Source.lean path => path ++ ext
-| Source.cpp  path => path ++ ext
+def Source.path : Source → FilePath
+| Source.lean path => file path ".lean"
+| Source.cpp path  => file path ".cpp"
+
+def Source.subst (ext : String) : Source → FilePath
+| Source.lean path => file path ext
+| Source.cpp  path => file path ext
 
 def Source.asOlean := Source.subst ".olean"
 def Source.asCpp   := Source.subst ".cpp"
 def Source.obj     := Source.subst ".o"
 
-def Source.garbage : Source → List String
+def Source.garbage : Source → List FilePath
 | Source.lean path =>
-  [ path ++ ".olean", path ++ ".cpp", path ++ ".o" ]
+  [ file path ".olean", file path ".cpp", file path ".o" ]
 | Source.cpp path  =>
-  [ path ++ ".o" ]
+  [ file path ".o" ]
 
 structure Project :=
 (build    : BuildType)
 (name     : String)
 (files    : List Source)
 (deps     : List Dep)
-(depsDir  : String)
-(srcDir   : String)
+(depsDir  : FilePath)
+(srcDir   : FilePath)
 (cppLibs  : List String)
 (cppFlags : List String)
 
-def Project.getBinary (conf : Project) : String :=
+def Project.getBinary (conf : Project) : FilePath :=
 match conf.build with
-| BuildType.executable => conf.name
-| BuildType.library => "lib" ++ conf.name ++ ".a"
+| BuildType.executable => FilePath.mk conf.name
+| BuildType.library => file ("lib" ++ conf.name) ".a"
 
 inductive Val
 | string : String → Val

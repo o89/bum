@@ -1,5 +1,7 @@
+open System (FilePath)
+
 @[extern 2 "lean_io_chdir"]
-constant IO.chdir (s : @& String) : IO UInt32
+constant changeDir (s : @& String) : IO UInt32
 
 @[extern 2 "lean_io_remove"]
 constant IO.remove (s : @& String) : IO UInt32
@@ -11,10 +13,15 @@ constant IO.getLastWriteTime (path : @& String) : IO UInt64
 constant IO.setEnv (name val : @& String) : IO UInt32
 
 abbrev List.joinPath : List String → String :=
-System.mkFilePath
+String.intercalate System.FilePath.pathSeparator.toString
 
 def List.space : List String → String :=
 String.intercalate " "
+
+def IO.chdir (path : FilePath) : IO Unit := do
+  let exitv ← changeDir (toString path)
+  unless (exitv = 0) do
+    throw (IO.Error.userError s!"cannot chdir to {path}")
 
 def sequence {α : Type} {m : Type → Type} [Monad m] : List (m α) → m (List α)
 | (hd :: tl) => do

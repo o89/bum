@@ -1,6 +1,8 @@
 import bum.auxiliary
 import bum.configparser
 
+open System (FilePath)
+
 def getExt (filename : String) : String × String :=
 let byDot := filename.splitOn ".";
 if byDot.length > 1 then
@@ -101,7 +103,7 @@ def confToProject (xs : List Val) : Except String Project := do
   let cppFlags ← getStringList "cpp-flags" xs;
   pure ⟨buildType, name, files, deps, depsDir, srcDir, cppLibs, cppFlags⟩
 
-def readConf (filename : String) : IO Project := do
+def readConf (filename : FilePath) : IO Project := do
   let contents ← IO.FS.readFile filename;
   let conf ← IO.ofExcept (Parser.run confParser contents);
   IO.ofExcept (confToProject conf)

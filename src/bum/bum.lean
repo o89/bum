@@ -7,9 +7,9 @@ def getTools (conf : Project) : IO Tools := do
   | some leanHome => do
     discard (IO.setEnv "LEAN_PATH" "")
     addToLeanPath [ leanHome, "lib", "lean" ].joinPath
-    let src ← IO.realPath conf.srcDir
+    let src ← IO.FS.realPath conf.srcDir
     addToLeanPath src
-    discard (IO.Process.run { cmd := "mkdir", args := #["-p", conf.depsDir]})
+    discard (IO.Process.run { cmd := "mkdir", args := #["-p", toString conf.depsDir]})
     pure ⟨leanHome, [ leanHome, "bin", "lean" ].joinPath, "ar", "c++"⟩
   | none => throw (IO.Error.userError "Environment variable LEAN_HOME not found")
 
@@ -19,7 +19,7 @@ def eval : Command → IO Unit
   match conf.build with
   | BuildType.executable => do
     let name := conf.getBinary
-    exec { cmd := [".", name].joinPath }
+    exec { cmd := toString (workdir / name) }
   | BuildType.library =>
     IO.println "Cannot start a library"
 | Command.clean scale => do
@@ -66,13 +66,13 @@ def evalList : List Command → IO Unit
 | [] => eval Command.help
 | [Command.nope, Command.leanPath] => do
   let conf ← readConf config
-  let src ← IO.realPath conf.srcDir
+  let src ← IO.FS.realPath conf.srcDir
   println! "export LEAN_PATH=$LEAN_PATH:{src}"
 | [Command.nope, Command.gitignore] => do
   let conf ← readConf config
   List.filter Source.cpp? conf.files
   |> List.map (λ file => s!"!{file.asCpp}")
-  |> (["*.olean", "*.o", "*.a", "*.cpp", conf.getBinary] ++ ·)
+  |> (["*.olean", "*.o", "*.a", "*.cpp", toString conf.getBinary] ++ ·)
   |> String.intercalate "\n"
   |> IO.println
 | xs => List.forM xs eval >> IO.println "OK"

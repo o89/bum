@@ -2,7 +2,10 @@ import Init.System.FilePath
 import bum.configconverter
 import Std.Data
 
+open System (FilePath)
 open IO.Process
+
+def workdir := FilePath.mk "."
 
 def Lean.deps := [ "-ldl", "-lgmp", "-Wl,--end-group", "-lLean",
                    "-lStd", "-lInit", "-lleancpp", "-Wl,--start-group" ]
@@ -28,61 +31,63 @@ def exec (proc : SpawnArgs) (s : Option String := none) : IO Unit := do
 
   pure ()
 
-def uptodate (filename : String) : IO Unit :=
+def uptodate (filename : FilePath) : IO Unit :=
 println! "“{filename}” is already up to date, skip."
 
 def Source.skip : Source → IO Unit :=
 uptodate ∘ Source.path
 
-def IO.enoent (path : String) : IO Bool :=
-not <$> IO.fileExists path
+def IO.enoent (path : FilePath) : IO Bool :=
+not <$> System.FilePath.pathExists path
 
-def IO.getLastWriteTime! (path : String) : IO UInt64 := do
-  if (← IO.fileExists path) then
-    IO.getLastWriteTime path
+def IO.getLastWriteTime! (path : FilePath) : IO UInt64 := do
+  if (← System.FilePath.pathExists path) then
+    IO.getLastWriteTime (toString path)
   else pure 0
 
-def Source.newer? (v : Source) (path : String) : IO Bool := do
+def Source.newer? (v : Source) (path : FilePath) : IO Bool := do
   let mtime₁ ← IO.getLastWriteTime! v.path
   let mtime₂ ← IO.getLastWriteTime! path
   pure (mtime₁ > mtime₂)
 
 def sourceOlean (tools : Tools) : Source → List Action
 | src@(Source.lean path) =>
-  [ { cmd := tools.lean, args := #["-o", src.asOlean, src.path],
+  [ { cmd := tools.lean, args := #["-o", toString src.asOlean, toString src.path],
       skip := src.skip, old? := src.newer? src.asOlean } ]
 | _ => []
 
 def getInclude (tools : Tools) : Array String :=
 #["-I" ++ [ tools.leanHome, "include" ].joinPath]
 
-def sourceCommands (tools : Tools) (dir : String) : Source → List Action
+def sourceCommands (tools : Tools) (dir : FilePath) : Source → List Action
 | src@(Source.lean path) =>
   [ -- generate olean
-    { cmd  := tools.lean, args := #["-o", src.asOlean, src.path],
+    { cmd  := tools.lean, args := #["-o", toString src.asOlean, toString src.path],
       skip := src.skip, old? := src.newer? src.asOlean },
     -- compile into .cpp
     { cmd  := tools.lean, old? := src.newer? src.asCpp,
-      args := #["-c", ["..", src.asCpp].joinPath, ["..", src.path].joinPath]
+      args := #["-c", ["..", toString src.asCpp].joinPath,
+                ["..", toString src.path].joinPath]
       cwd  := dir },
     -- emit .o
     { cmd  := tools.cpp, old? := src.newer? src.obj,
-      args := getInclude tools ++ #["-c", src.asCpp, "-o", src.obj] } ]
+      args := getInclude tools ++ #["-c", toString src.asCpp, "-o", toString src.obj] } ]
 | src@(Source.cpp path) =>
   [{ cmd := tools.cpp, old? := src.newer? src.obj, skip := src.skip,
-     args := getInclude tools ++ #["-c", src.path, "-o", src.obj] } ]
+     args := getInclude tools ++ #["-c", toString src.path, "-o", toString src.obj] } ]
 
-def sourceLink (output : String) (tools : Tools)
+def sourceLink (output : FilePath) (tools : Tools)
   (files : List Source) (flags : List String) : List Action :=
 [ { cmd := tools.ar, old? := IO.enoent output, skip := uptodate output,
-    args := #["rvs", output] ++ Array.map Source.obj files.toArray ++
-              flags.toArray } ]
+    args := #["rvs", toString output] ++
+            Array.map (toString ∘ Source.obj) files.toArray ++
+            flags.toArray } ]
 
-def sourceCompile (output : String) (tools : Tools)
+def sourceCompile (output : FilePath) (tools : Tools)
   (files : List Source) (libs flags : List String) : List Action :=
 [ { cmd := tools.cpp, old? := IO.enoent output, skip := uptodate output,
-    args := Lean.cppOptions.toArray ++ #["-o", output] ++
-            (List.map Source.obj files).reverse.toArray ++
+    args := Lean.cppOptions.toArray.map toString ++ #["-o", toString output] ++
+            (List.map (toString ∘ Source.obj) files).reverse.toArray ++
             libs.reverse.toArray ++ flags.toArray ++
             #["-L" ++ tools.leanHome ++ "/lib/lean"] } ]
 
@@ -117,8 +122,8 @@ def compileProject (force : IO.Ref Bool) (conf : Project)
   compileCommands conf tools libs conf.cppFlags
   |> procents |> λ xs => List.forM xs (performAction force)
 
-def silentRemove (filename : String) : IO Unit :=
-IO.remove filename >>= λ _ => pure ()
+def silentRemove (filename : FilePath) : IO Unit :=
+IO.remove (toString filename) >>= λ _ => pure ()
 
 structure Pkg :=
 (name path : String)
@@ -128,22 +133,23 @@ match dest with
 | "" => delta
 | _  => dest ++ ":" ++ delta
 
-def addToLeanPath (u : String) : IO Unit := do
-  let path ← IO.getEnv "LEAN_PATH";
+def addToLeanPath (path : FilePath) : IO Unit := do
+  let u := toString path
+  let path ← IO.getEnv "LEAN_PATH"
   match path with
   | none   => IO.setEnv "LEAN_PATH" u
   | some v => IO.setEnv "LEAN_PATH" (v.addToPath u);
   pure ()
 
-abbrev Path := String
-abbrev Deps := List (Path × Project)
+abbrev Link := System.FilePath × Project
+abbrev Deps := List Link
 
-partial def resolveDepsAux (depsDir : String) (download : Bool) :
+partial def resolveDepsAux (depsDir : FilePath) (download : Bool) :
   String → Dep → IO Deps
 | parent, dep => do
-  let confPath := [ depsDir, dep.name, config ].joinPath;
+  let confPath := depsDir / dep.name / config;
 
-  let isThere ← IO.fileExists confPath;
+  let isThere ← System.FilePath.pathExists confPath;
   if (¬isThere ∧ download) then {
     IO.println ("==> downloading " ++ dep.name ++ " (of " ++ parent ++ ")");
     exec (Dep.cmd depsDir dep)
@@ -157,38 +163,34 @@ partial def resolveDepsAux (depsDir : String) (download : Bool) :
   | _ => pure ()
 
   let projects ← sequence (List.map (resolveDepsAux depsDir download dep.name) conf.deps);
-  pure (List.join projects ++ [ (dep.name, conf) ])
+  pure (List.join projects ++ [(FilePath.mk dep.name, conf)])
 
 def resolveDeps (conf : Project) (download : Bool := false) : IO Deps :=
 List.uniq (Project.name ∘ Prod.snd) <$> List.join <$>
   List.mapM (resolveDepsAux conf.depsDir download conf.name) conf.deps
 
-def getLeanPathFromDeps (depsDir : String) (xs : Deps) : IO (List String) :=
-let getSourcesDir : Path × Project → String :=
-λ (path, conf) => [ ".", depsDir, path, conf.srcDir ].joinPath
-List.mapM (IO.realPath ∘ getSourcesDir) xs
+def getLeanPathFromDeps (depsDir : FilePath) (xs : Deps) : IO (List FilePath) :=
+let getSourcesDir : Link → FilePath :=
+λ (path, conf) => workdir / depsDir / path / conf.srcDir;
+List.mapM (IO.FS.realPath ∘ getSourcesDir) xs
 
-def getDepBinaryPath (depsDir : String) (conf : Path × Project) : String :=
-[ ".", depsDir, conf.fst, conf.snd.getBinary ].joinPath
+def getDepBinaryPath (depsDir : FilePath) (conf : FilePath × Project) : FilePath :=
+workdir / depsDir / conf.fst / conf.snd.getBinary
 
-def getCppLibraries (conf : Path × Project) : List String :=
+def getCppLibraries (conf : FilePath × Project) : List String :=
 List.map (String.append "-l") conf.snd.cppLibs
 
-def evalDep {α : Type} (depsDir : String) (rel : Path)
+def evalDep {α : Type} (depsDir : FilePath) (rel : FilePath)
   (action : IO α) : IO α := do
-  let cwd ← IO.realPath "."
-  let path := [ depsDir, rel ].joinPath
+  let cwd ← IO.FS.realPath "."
+  let path := depsDir / rel
 
-  let exitv ← IO.chdir path
-  unless (exitv = 0) do {
-    throw (IO.Error.userError s!"cannot chdir to {path}")
-  }
-
+  IO.chdir path
   let val ← action
-  discard (IO.chdir cwd)
+  IO.chdir cwd
   pure val
 
-def buildAux (tools : Tools) (depsDir : String) (force : IO.Ref Bool)
+def buildAux (tools : Tools) (depsDir : FilePath) (force : IO.Ref Bool)
   (doneRef : IO.Ref (Std.HashSet String)) : Deps → IO Unit
 | [] => pure ()
 | hd :: tl => do
@@ -216,7 +218,7 @@ def build (tools : Tools) (conf : Project) (force? := false) : IO Unit := do
   let libs :=
     Lean.deps ++
     List.join (List.map getCppLibraries deps) ++
-    List.map (getDepBinaryPath conf.depsDir) deps;
+    List.map (toString ∘ getDepBinaryPath conf.depsDir) deps;
 
   compileProject force conf tools libs
 
