@@ -7,10 +7,13 @@ open IO.Process
 
 def workdir := FilePath.mk "."
 
-def Lean.deps := [ "-ldl", "-lgmp", "-Wl,--end-group", "-lLean",
-                   "-lStd", "-lInit", "-lleancpp", "-Wl,--start-group" ]
+def Lean.deps := [
+  "-ldl", "-lgmp", "-lm", "-lstdc++",
+  "-Wl,--end-group", "-lleanrt", "-lStd", "-lInit", "-Wl,--start-group",
+  "-Wl,--end-group", "-lLean", "-lleancpp", "-Wl,--start-group"
+]
 
-def Lean.cppOptions := [ "-no-pie", "-pthread", "-Wno-unused-command-line-argument" ]
+def Lean.cppOptions := ["-D LEAN_MULTI_THREAD", "-D LEAN_AUTO_THREAD_FINALIZATION", "-fPIC", "-fvisibility=hidden", "-pthread"]
 
 def config := "bum.config"
 

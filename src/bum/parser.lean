@@ -22,11 +22,11 @@ instance : Monad Parser :=
 def Parser.failure {α : Type} : Parser α :=
 λ _ pos => ParseResult.fail pos []
 
-def Parser.orElse {α : Type} (p q : Parser α) : Parser α :=
+def Parser.orElse {α : Type} (p : Parser α) (q : Unit → Parser α) : Parser α :=
 λ input pos => match p input pos with
 | ParseResult.fail pos₁ msg₁ =>
   if pos₁ ≠ pos then ParseResult.fail pos₁ msg₁
-  else match q input pos with
+  else match q () input pos with
   | ParseResult.fail pos₂ msg₂ =>
     if pos₁ < pos₂ then ParseResult.fail pos₁ msg₁
     else if pos₂ < pos₁ then ParseResult.fail pos₂ msg₂

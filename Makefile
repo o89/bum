@@ -8,8 +8,8 @@ LEAN = src/bum/auxiliary src/bum/parser src/bum/types src/bum/configparser src/b
 OBJS = $(shell for path in $(addsuffix .o, $(CPP) $(LEAN)); do echo $$path; done | tac)
 
 CXX = c++
-CFLAGS = -g -Wall -D LEAN_MULTI_THREAD -Wno-unused-command-line-argument -pthread
-LIBS = -no-pie -Wl,--start-group -lleancpp -lInit -lStd -lLean -Wl,--end-group -lgmp -ldl
+CFLAGS = -g -Wall -D LEAN_MULTI_THREAD -D LEAN_AUTO_THREAD_FINALIZATION -fPIC -fvisibility=hidden -pthread
+LIBS = -Wl,--start-group -lleancpp -lLean -Wl,--end-group -Wl,--start-group -lInit -lStd -lleanrt -Wl,--end-group -lstdc++ -lm -lgmp -ldl
 
 RES = bum
 
