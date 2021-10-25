@@ -65,8 +65,10 @@ def getInclude (tools : Tools) : Array String :=
 def sourceCommands (tools : Tools) (dir : FilePath) : Source → List Action
 | src@(Source.lean path) =>
   [ -- generate olean
-    { cmd  := tools.lean, args := #["-o", toString src.asOlean, toString src.path],
-      skip := src.skip, old? := src.newer? src.asOlean },
+    { cmd  := tools.lean, skip := src.skip,
+      args := #["-o", ["..", toString src.asOlean].joinPath,
+                ["..", toString src.path].joinPath],
+      old? := src.newer? src.asOlean, cwd := dir },
     -- compile into .cpp
     { cmd  := tools.lean, old? := src.newer? src.asCpp,
       args := #["-c", ["..", toString src.asCpp].joinPath,
