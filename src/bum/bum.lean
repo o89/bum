@@ -72,7 +72,7 @@ def evalList : List Command → IO Unit
   let conf ← readConf config
   List.filter Source.cpp? conf.files
   |> List.map (λ file => s!"!{file.asCpp}")
-  |> (["*.olean", "*.o", "*.a", "*.cpp", toString conf.getBinary] ++ ·)
+  |> (["*.olean", "*.o", "*.a", "*.cpp", [".", toString conf.getBinary].joinPath] ++ ·)
   |> String.intercalate "\n"
   |> IO.println
 | xs => List.forM xs eval >> IO.println "OK"
